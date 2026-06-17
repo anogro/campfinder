@@ -2,13 +2,13 @@ import argparse
 import os
 import json
 import time
+import urllib.parse
 import gspread
 from google.oauth2.service_account import Credentials
 from bs4 import BeautifulSoup
 import google.generativeai as genai
 from playwright.sync_api import sync_playwright
 import datetime
-from duckduckgo_search import DDGS
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Overseas Camp Crawler")
@@ -94,45 +94,59 @@ def main():
     search_query_kr = f"{args.year} {args.season} {args.city} 영어 캠프"
     search_query_en = f"{args.year} {args.season} {args.city} english camp"
     
-    print(f"Searching Google and YouTube for:\n1. {search_query_kr}\n2. {search_query_en}")
+    print(f"Searching for:\n1. {search_query_kr}\n2. {search_query_en}")
     
     target_urls = set()
     global_status = "성공"
-    
-    # DuckDuckGo Search
-    try:
-        with DDGS() as ddgs:
-            print("Searching DuckDuckGo (Korean)...")
-            results_kr = list(ddgs.text(search_query_kr, max_results=5))
-            for r in results_kr:
-                target_urls.add(r['href'])
-                
-            print("Searching DuckDuckGo (English)...")
-            results_en = list(ddgs.text(search_query_en, max_results=5))
-            for r in results_en:
-                target_urls.add(r['href'])
-    except Exception as e:
-        print(f"DuckDuckGo search failed: {e}")
-        global_status = f"검색 오류: {str(e)[:50]}"
-        
-    target_urls = list(target_urls)
-    print(f"Found {len(target_urls)} unique URLs: {target_urls}")
-    
     camps_data = []
     
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
+        # 봇 탐지 우회를 위한 User-Agent
         page = browser.new_page(user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+        
+        # 1. Playwright를 이용한 DuckDuckGo Lite 검색
+        def search_ddg_lite(query, max_res=5):
+            print(f"Searching DuckDuckGo Lite for: {query}")
+            try:
+                search_url = f"https://lite.duckduckgo.com/lite/"
+                page.goto(search_url, timeout=30000)
+                page.fill("input[name='q']", query)
+                page.click("input[type='submit']")
+                page.wait_for_selector(".result-snippet", timeout=10000)
+                
+                # Extract links
+                links = page.query_selector_all("td.result-snippet a")
+                found = 0
+                for link in links:
+                    if found >= max_res: break
+                    href = link.get_attribute("href")
+                    if href and "http" in href:
+                        target_urls.add(href)
+                        found += 1
+            except Exception as e:
+                print(f"Search failed for {query}: {e}")
+
+        search_ddg_lite(search_query_kr, 5)
+        search_ddg_lite(search_query_en, 5)
+        
+        target_urls = list(target_urls)
+        print(f"Found {len(target_urls)} unique URLs: {target_urls}")
+        
+        if len(target_urls) == 0:
+            global_status = "검색된 링크 0개 (차단 또는 결과 없음)"
+            
+        # 2. 검색된 URL에서 정보 추출
+        extracted_count = 0
         for url in target_urls:
             try:
                 page.goto(url, timeout=30000)
-                # Wait for page to load
                 time.sleep(3)
                 html_content = page.content()
                 cleaned_text = extract_text_with_bs4(html_content)
                 
                 if len(cleaned_text) < 100:
-                    print(f"Skipping {url}: Not enough text content.")
+                    print(f"Skipping {url}: Not enough text content (len: {len(cleaned_text)}).")
                     continue
                     
                 print(f"Analyzing content from {url}...")
@@ -141,9 +155,11 @@ def main():
                 llm_result["imageUrl"] = "default_camp.png"
                 
                 camps_data.append(llm_result)
+                extracted_count += 1
             except Exception as e:
                 print(f"Failed to process {url}: {e}")
-                global_status = f"분석 오류 발생 (일부 누락)"
+                global_status = "분석 중 일부 오류 발생"
+                
         browser.close()
 
     try:
@@ -189,11 +205,13 @@ def main():
             main_sheet.append_rows(new_rows)
             
         # Update status if 0 items added but no errors
-        if added_count == 0 and global_status == "성공":
+        if added_count == 0:
             if len(camps_data) > 0:
                 global_status = "성공 (모두 중복된 데이터)"
-            else:
-                global_status = "성공 (검색된 캠프 없음)"
+            elif len(target_urls) > 0:
+                global_status = f"성공 (링크 {len(target_urls)}개 중 분석 가능한 캠프 없음)"
+            elif global_status == "성공":
+                global_status = "성공 (검색된 링크 없음)"
 
         # Add log
         log_sheet.append_row([
