@@ -1,4 +1,5 @@
 import CampCard, { CampData } from '@/components/CampCard';
+import { getCampsData } from '@/lib/googleSheets';
 
 export default async function Home() {
   let camps: CampData[] = [];
@@ -6,22 +7,14 @@ export default async function Home() {
   let isLoadingDummy = false;
 
   try {
-    const gasUrl = process.env.NEXT_PUBLIC_GAS_API_URL;
-    if (!gasUrl || gasUrl.includes('YOUR_SCRIPT_ID')) {
-      errorMsg = '구글 앱스 스크립트 API URL이 연동되지 않았습니다. 임시 데이터를 표시합니다.';
-      isLoadingDummy = true;
-    } else {
-      const res = await fetch(gasUrl, { next: { revalidate: 60 } });
-      if (!res.ok) {
-        errorMsg = 'API 연동에 실패했습니다. (HTTP 상태 코드: ' + res.status + ')';
-      } else {
-        const json = await res.json();
-        if (json.status === 'success' && Array.isArray(json.data)) {
-          camps = json.data.filter((c: CampData) => c['승인 상태'] === '승인');
-        } else {
-          errorMsg = '데이터 형식이 올바르지 않습니다.';
-        }
+    const result = await getCampsData();
+    if (result.status === 'error' || !result.data) {
+      errorMsg = 'API 연동에 실패했습니다: ' + (result.message || 'Unknown error');
+      if (result.message?.includes('not properly configured')) {
+        isLoadingDummy = true;
       }
+    } else {
+      camps = result.data.filter((c: CampData) => c['승인 상태'] === '승인');
     }
   } catch (error: any) {
     console.error('Fetch error:', error.message);

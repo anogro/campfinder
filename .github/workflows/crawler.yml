@@ -40,7 +40,8 @@ jobs:
       - name: Run Crawler Script
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          GAS_API_URL: ${{ secrets.GAS_API_URL }}
+          GOOGLE_CREDENTIALS_JSON: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
+          GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
         run: |
           cd crawler
           if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then

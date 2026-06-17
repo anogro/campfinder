@@ -1,10 +1,12 @@
 import argparse
 import os
 import json
-import requests
+import gspread
+from google.oauth2.service_account import Credentials
 from bs4 import BeautifulSoup
 from openai import OpenAI
 from playwright.sync_api import sync_playwright
+import datetime
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Overseas Camp Crawler")
@@ -15,36 +17,19 @@ def parse_args():
 
 def extract_text_with_bs4(html_content):
     soup = BeautifulSoup(html_content, "html.parser")
-    # Extract only text from p and div tags to minimize token usage
     text_blocks = []
     for tag in soup.find_all(['p', 'div']):
         text = tag.get_text(separator=' ', strip=True)
-        if len(text) > 20: # Filter out very short UI strings
+        if len(text) > 20:
             text_blocks.append(text)
     return " ".join(text_blocks)
 
 def analyze_with_llm(text_content):
     client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
-    
     prompt = """
     다음은 해외 영어 캠프 프로그램 웹페이지에서 추출한 텍스트입니다.
     이를 분석하여 다음 16가지 항목의 JSON 형태로 정제해주세요.
     정보가 없거나 모호하면 반드시 '문의 필요'로 입력하세요. 이미지가 없으면 'default_camp.png'로 입력하세요.
-    
-    [추출 항목 규칙]
-    1. programName: 영문명인 경우 자연스러운 한국어로 번역 및 정제
-    2. place: 캠프가 실제로 열리고 수업을 진행하는 현지 학교/어학원명 (원어 및 한글 병기)
-    3. seller: 국내 홍보 및 상담/예약을 받는 주체 (유학원/플랫폼명, 자체 모집 시 '자체 모집')
-    4. operationType: 학교 자체 운영 / 유학원 독점 대행 / 유학원 단순 중개 중 분류
-    5. koreanSupport: 상(한국인 상주, 카톡 소통) / 중(한국어 안내문) / 하(100% 영어) 중 분류
-    6. targetAudience: 현지 학제(Grade) 기준을 한국 나이/학년으로 환산 (예: 만 6세~12세)
-    7. participantType: 자녀 전용(아이만 통학) / 가족 동반(부모 동반 패키지) 중 분류
-    8. programCategory: 영어 몰입 / STEM/창의 / 스포츠/예체능 / 정규 학제 스쿨링 중 분류
-    9. ageGroup: 유치부 / 초등 저학년 / 초등 고학년 / 중고등 중 매핑
-    10. schedule: 시작일 및 종료일 명시 (예: 2026.07.20 ~ 2026.08.14)
-    11. accommodation: 기숙사(보딩) / 외부 연계 숙소 / 미포함(자체 통학) 중 분류
-    12. cost: 현지 통화 기준 수집 후 대략적인 원화 환산 병기 (예: $1,500 (약 205만 원))
-    13. summary: 커리큘럼 핵심을 3줄 요약 문장으로 생성
     
     [JSON Output Format Example]
     {
@@ -59,22 +44,41 @@ def analyze_with_llm(text_content):
         model="gpt-4o-mini",
         messages=[
             {"role": "system", "content": "You are a helpful data extraction assistant that outputs strict JSON."},
-            {"role": "user", "content": prompt + "\n\n[웹페이지 텍스트]\n" + text_content[:15000]} # Limit tokens
+            {"role": "user", "content": prompt + "\n\n[웹페이지 텍스트]\n" + text_content[:15000]}
         ],
         response_format={ "type": "json_object" }
     )
-    
     return json.loads(response.choices[0].message.content)
+
+def connect_to_sheets():
+    scopes = [
+        "https://www.googleapis.com/auth/spreadsheets"
+    ]
+    
+    creds_json = os.environ.get("GOOGLE_CREDENTIALS_JSON")
+    if not creds_json:
+        raise ValueError("GOOGLE_CREDENTIALS_JSON environment variable not set")
+        
+    creds_dict = json.loads(creds_json)
+    credentials = Credentials.from_service_account_info(creds_dict, scopes=scopes)
+    client = gspread.authorize(credentials)
+    
+    sheet_id = os.environ.get("GOOGLE_SHEET_ID")
+    if not sheet_id:
+        raise ValueError("GOOGLE_SHEET_ID environment variable not set")
+        
+    sheet = client.open_by_key(sheet_id)
+    main_worksheet = sheet.worksheet("Camps")
+    log_worksheet = sheet.worksheet("Crawl_Log")
+    
+    return main_worksheet, log_worksheet
 
 def main():
     args = parse_args()
-    
     print(f"Starting crawl for {args.city}, {args.year}, {args.season}...")
     
-    # Placeholder URLs - In a real scenario, we would search Google first.
-    # For this script, we simulate hitting a target URL.
     target_urls = [
-        "https://example.com/camp1", # Replace with actual logic to fetch urls
+        "https://example.com/camp1"
     ]
     
     camps_data = []
@@ -82,45 +86,76 @@ def main():
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         page = browser.new_page()
-        
         for url in target_urls:
             try:
                 page.goto(url, timeout=30000)
                 html_content = page.content()
-                
-                # Extract text using BeautifulSoup
                 cleaned_text = extract_text_with_bs4(html_content)
                 
-                # Analyze with LLM
                 print(f"Analyzing content from {url}...")
                 llm_result = analyze_with_llm(cleaned_text)
-                
-                # Add default fields
                 llm_result["sourceUrl"] = url
-                llm_result["imageUrl"] = "default_camp.png" # Typically extracted via BS4 targeting <img>, set to default here
+                llm_result["imageUrl"] = "default_camp.png"
                 
                 camps_data.append(llm_result)
-                
             except Exception as e:
                 print(f"Failed to process {url}: {e}")
-                
         browser.close()
+
+    try:
+        main_sheet, log_sheet = connect_to_sheets()
         
-    # Send to GAS
-    gas_url = os.environ.get("GAS_API_URL")
-    if gas_url and camps_data:
-        payload = {
-            "cityId": args.city,
-            "year": args.year,
-            "season": args.season,
-            "camps": camps_data
-        }
+        existing_data = main_sheet.get_all_values()
+        existing_urls = [row[16] for row in existing_data[1:]] if len(existing_data) > 1 else []
         
-        print(f"Sending {len(camps_data)} records to GAS...")
-        res = requests.post(gas_url, json=payload)
-        print(f"GAS Response: {res.text}")
-    else:
-        print("GAS_API_URL not set or no data extracted.")
+        added_count = 0
+        new_rows = []
+        
+        for camp in camps_data:
+            if camp.get("sourceUrl") in existing_urls:
+                continue
+                
+            next_index = (len(existing_data) - 1 if len(existing_data) > 0 else 0) + added_count
+            program_id = f"PROG-{args.year}-{args.city}-{str(next_index).zfill(3)}"
+            
+            new_rows.append([
+                program_id,
+                args.city,
+                f"{args.year}_{args.season}",
+                camp.get("programName", "문의 필요"),
+                camp.get("place", "문의 필요"),
+                camp.get("seller", "문의 필요"),
+                camp.get("operationType", "문의 필요"),
+                camp.get("koreanSupport", "문의 필요"),
+                camp.get("targetAudience", "문의 필요"),
+                camp.get("participantType", "문의 필요"),
+                camp.get("programCategory", "문의 필요"),
+                camp.get("ageGroup", "문의 필요"),
+                camp.get("schedule", "문의 필요"),
+                camp.get("accommodation", "문의 필요"),
+                camp.get("cost", "문의 필요"),
+                camp.get("imageUrl", "default_camp.png"),
+                camp.get("sourceUrl", "문의 필요"),
+                camp.get("summary", "문의 필요"),
+                "대기"
+            ])
+            added_count += 1
+            
+        if new_rows:
+            main_sheet.append_rows(new_rows)
+            
+        # Add log
+        log_sheet.append_row([
+            str(datetime.datetime.now()),
+            f"{args.city}, {args.year}, {args.season}",
+            added_count,
+            "성공"
+        ])
+        
+        print(f"Successfully added {added_count} rows to Google Sheets.")
+        
+    except Exception as e:
+        print(f"Failed to save data to Google Sheets: {e}")
 
 if __name__ == "__main__":
     main()

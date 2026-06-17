@@ -22,9 +22,7 @@ export default function AdminDashboard() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const gasUrl = process.env.NEXT_PUBLIC_GAS_API_URL;
-      if (!gasUrl) return;
-      const res = await fetch(gasUrl);
+      const res = await fetch('/api/camps');
       const json = await res.json();
       if (json.status === 'success') {
         setCamps(json.data);
