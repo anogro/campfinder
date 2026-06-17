@@ -52,7 +52,17 @@ def analyze_with_llm(text_content):
     full_prompt = prompt + "\n\n[웹페이지 텍스트]\n" + text_content[:15000]
     
     response = model.generate_content(full_prompt)
-    return json.loads(response.text)
+    
+    # Strip markdown if present
+    res_text = response.text.strip()
+    if res_text.startswith("```json"):
+        res_text = res_text[7:]
+    if res_text.startswith("```"):
+        res_text = res_text[3:]
+    if res_text.endswith("```"):
+        res_text = res_text[:-3]
+        
+    return json.loads(res_text.strip())
 
 def connect_to_sheets():
     scopes = [
@@ -87,6 +97,7 @@ def main():
     print(f"Searching Google and YouTube for:\n1. {search_query_kr}\n2. {search_query_en}")
     
     target_urls = set()
+    global_status = "성공"
     
     # DuckDuckGo Search
     try:
@@ -102,6 +113,7 @@ def main():
                 target_urls.add(r['href'])
     except Exception as e:
         print(f"DuckDuckGo search failed: {e}")
+        global_status = f"검색 오류: {str(e)[:50]}"
         
     target_urls = list(target_urls)
     print(f"Found {len(target_urls)} unique URLs: {target_urls}")
@@ -131,6 +143,7 @@ def main():
                 camps_data.append(llm_result)
             except Exception as e:
                 print(f"Failed to process {url}: {e}")
+                global_status = f"분석 오류 발생 (일부 누락)"
         browser.close()
 
     try:
@@ -175,12 +188,19 @@ def main():
         if new_rows:
             main_sheet.append_rows(new_rows)
             
+        # Update status if 0 items added but no errors
+        if added_count == 0 and global_status == "성공":
+            if len(camps_data) > 0:
+                global_status = "성공 (모두 중복된 데이터)"
+            else:
+                global_status = "성공 (검색된 캠프 없음)"
+
         # Add log
         log_sheet.append_row([
             str(datetime.datetime.now()),
             f"{args.city}, {args.year}, {args.season}",
             added_count,
-            "성공"
+            global_status
         ])
         
         print(f"Successfully added {added_count} rows to Google Sheets.")
