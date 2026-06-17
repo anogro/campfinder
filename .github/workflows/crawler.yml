@@ -1,0 +1,50 @@
+name: Run Camp Crawler
+
+on:
+  workflow_dispatch:
+    inputs:
+      city:
+        description: 'City ID (e.g., KL-01)'
+        required: true
+        default: 'KL-01'
+      year:
+        description: 'Year (e.g., 2026)'
+        required: true
+        default: '2026'
+      season:
+        description: 'Season (e.g., 여름방학)'
+        required: true
+        default: '여름방학'
+  repository_dispatch:
+    types: [trigger-crawler]
+
+jobs:
+  run-crawler:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          cd crawler
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          python -m playwright install --with-deps chromium
+
+      - name: Run Crawler Script
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GAS_API_URL: ${{ secrets.GAS_API_URL }}
+        run: |
+          cd crawler
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            python main.py --city "${{ github.event.inputs.city }}" --year "${{ github.event.inputs.year }}" --season "${{ github.event.inputs.season }}"
+          elif [ "${{ github.event_name }}" == "repository_dispatch" ]; then
+            python main.py --city "${{ github.event.client_payload.city }}" --year "${{ github.event.client_payload.year }}" --season "${{ github.event.client_payload.season }}"
+          fi
