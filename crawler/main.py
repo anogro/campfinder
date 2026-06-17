@@ -113,10 +113,10 @@ def main():
                 page.goto(search_url, timeout=30000)
                 page.fill("input[name='q']", query)
                 page.click("input[type='submit']")
-                page.wait_for_selector(".result-snippet", timeout=10000)
+                page.wait_for_selector(".result-link", timeout=10000)
                 
                 # Extract links
-                links = page.query_selector_all("td.result-snippet a")
+                links = page.query_selector_all("a.result-link")
                 found = 0
                 for link in links:
                     if found >= max_res: break
