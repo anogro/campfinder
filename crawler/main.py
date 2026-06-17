@@ -5,7 +5,7 @@ import time
 import gspread
 from google.oauth2.service_account import Credentials
 from bs4 import BeautifulSoup
-from openai import OpenAI
+import google.generativeai as genai
 from playwright.sync_api import sync_playwright
 import datetime
 from googlesearch import search as google_search
@@ -28,7 +28,12 @@ def extract_text_with_bs4(html_content):
     return " ".join(text_blocks)
 
 def analyze_with_llm(text_content):
-    client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+    api_key = os.environ.get("GEMINI_API_KEY")
+    if not api_key:
+        raise ValueError("GEMINI_API_KEY environment variable not set")
+    
+    genai.configure(api_key=api_key)
+    
     prompt = """
     다음은 해외 영어 캠프 프로그램 웹페이지에서 추출한 텍스트입니다.
     이를 분석하여 다음 16가지 항목의 JSON 형태로 정제해주세요.
@@ -44,15 +49,11 @@ def analyze_with_llm(text_content):
     }
     """
     
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[
-            {"role": "system", "content": "You are a helpful data extraction assistant that outputs strict JSON."},
-            {"role": "user", "content": prompt + "\n\n[웹페이지 텍스트]\n" + text_content[:15000]}
-        ],
-        response_format={ "type": "json_object" }
-    )
-    return json.loads(response.choices[0].message.content)
+    model = genai.GenerativeModel('gemini-1.5-flash', generation_config={"response_mime_type": "application/json"})
+    full_prompt = prompt + "\n\n[웹페이지 텍스트]\n" + text_content[:15000]
+    
+    response = model.generate_content(full_prompt)
+    return json.loads(response.text)
 
 def connect_to_sheets():
     scopes = [
@@ -91,11 +92,11 @@ def main():
     # Google Search
     try:
         print("Searching Google (Korean)...")
-        for url in google_search(search_query_kr, num=2, stop=2, pause=2):
+        for url in google_search(search_query_kr, num=5, stop=5, pause=2):
             target_urls.add(url)
             
         print("Searching Google (English)...")
-        for url in google_search(search_query_en, num=2, stop=2, pause=2):
+        for url in google_search(search_query_en, num=5, stop=5, pause=2):
             target_urls.add(url)
     except Exception as e:
         print(f"Google search failed: {e}")
@@ -103,12 +104,12 @@ def main():
     # YouTube Search
     try:
         print("Searching YouTube (Korean)...")
-        yt_kr = VideosSearch(search_query_kr, limit=1).result()
+        yt_kr = VideosSearch(search_query_kr, limit=2).result()
         for video in yt_kr.get('result', []):
             target_urls.add(video['link'])
             
         print("Searching YouTube (English)...")
-        yt_en = VideosSearch(search_query_en, limit=1).result()
+        yt_en = VideosSearch(search_query_en, limit=2).result()
         for video in yt_en.get('result', []):
             target_urls.add(video['link'])
     except Exception as e:

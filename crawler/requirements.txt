@@ -1,6 +1,6 @@
 playwright
 beautifulsoup4
-openai
+google-generativeai
 gspread
 google-auth
 googlesearch-python
