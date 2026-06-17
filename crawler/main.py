@@ -100,8 +100,8 @@ def main():
     target_urls = set()
     global_status = "성공"
     # 1. Google Custom Search API를 이용한 검색
-    api_key = os.environ.get("GOOGLE_SEARCH_API_KEY")
-    cx = os.environ.get("GOOGLE_SEARCH_CX")
+    api_key = os.environ.get("GOOGLE_SEARCH_API_KEY", "").strip()
+    cx = os.environ.get("GOOGLE_SEARCH_CX", "").strip()
     
     if not api_key or not cx:
         print("GOOGLE_SEARCH_API_KEY or GOOGLE_SEARCH_CX not set. Skip search.")
@@ -126,7 +126,7 @@ def main():
             
         except Exception as e:
             print(f"Google Search API failed: {e}")
-            global_status = f"구글 검색 API 오류: {str(e)[:50]}"
+            global_status = f"구글 검색 API 오류: {str(e)[:500]}"
             
     target_urls = list(target_urls)
     print(f"Found {len(target_urls)} unique URLs: {target_urls}")
