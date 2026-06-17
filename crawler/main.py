@@ -80,30 +80,41 @@ def main():
     args = parse_args()
     print(f"Starting crawl for {args.city}, {args.year}, {args.season}...")
     
-    search_query = f"{args.year} {args.season} {args.city} 영어 캠프"
-    print(f"Searching Google and YouTube for: {search_query}")
+    search_query_kr = f"{args.year} {args.season} {args.city} 영어 캠프"
+    search_query_en = f"{args.year} {args.season} {args.city} english camp"
     
-    target_urls = []
+    print(f"Searching Google and YouTube for:\n1. {search_query_kr}\n2. {search_query_en}")
+    
+    target_urls = set()
     
     # Google Search
     try:
-        print("Searching Google...")
-        for url in google_search(search_query, num=3, stop=3, pause=2):
-            target_urls.append(url)
+        print("Searching Google (Korean)...")
+        for url in google_search(search_query_kr, num=2, stop=2, pause=2):
+            target_urls.add(url)
+            
+        print("Searching Google (English)...")
+        for url in google_search(search_query_en, num=2, stop=2, pause=2):
+            target_urls.add(url)
     except Exception as e:
         print(f"Google search failed: {e}")
         
     # YouTube Search
     try:
-        print("Searching YouTube...")
-        videos_search = VideosSearch(search_query, limit=2)
-        yt_results = videos_search.result()
-        for video in yt_results.get('result', []):
-            target_urls.append(video['link'])
+        print("Searching YouTube (Korean)...")
+        yt_kr = VideosSearch(search_query_kr, limit=1).result()
+        for video in yt_kr.get('result', []):
+            target_urls.add(video['link'])
+            
+        print("Searching YouTube (English)...")
+        yt_en = VideosSearch(search_query_en, limit=1).result()
+        for video in yt_en.get('result', []):
+            target_urls.add(video['link'])
     except Exception as e:
         print(f"YouTube search failed: {e}")
         
-    print(f"Found URLs: {target_urls}")
+    target_urls = list(target_urls)
+    print(f"Found {len(target_urls)} unique URLs: {target_urls}")
     
     camps_data = []
     
