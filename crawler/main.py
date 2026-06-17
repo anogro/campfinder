@@ -9,6 +9,7 @@ from bs4 import BeautifulSoup
 import google.generativeai as genai
 from playwright.sync_api import sync_playwright
 import datetime
+from googleapiclient.discovery import build
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Overseas Camp Crawler")
@@ -98,46 +99,49 @@ def main():
     
     target_urls = set()
     global_status = "성공"
+    # 1. Google Custom Search API를 이용한 검색
+    api_key = os.environ.get("GOOGLE_SEARCH_API_KEY")
+    cx = os.environ.get("GOOGLE_SEARCH_CX")
+    
+    if not api_key or not cx:
+        print("GOOGLE_SEARCH_API_KEY or GOOGLE_SEARCH_CX not set. Skip search.")
+        global_status = "오류: 검색 API 키가 설정되지 않음"
+    else:
+        try:
+            service = build("customsearch", "v1", developerKey=api_key)
+            
+            def search_google_api(query, max_res=5):
+                print(f"Searching Google API for: {query}")
+                res = service.cse().list(q=query, cx=cx, num=max_res).execute()
+                found = 0
+                for item in res.get('items', []):
+                    link = item.get('link')
+                    if link:
+                        target_urls.add(link)
+                        found += 1
+                return found
+
+            search_google_api(search_query_kr, 5)
+            search_google_api(search_query_en, 5)
+            
+        except Exception as e:
+            print(f"Google Search API failed: {e}")
+            global_status = f"구글 검색 API 오류: {str(e)[:50]}"
+            
+    target_urls = list(target_urls)
+    print(f"Found {len(target_urls)} unique URLs: {target_urls}")
+    
+    if len(target_urls) == 0 and global_status == "성공":
+        global_status = "검색된 링크 0개 (결과 없음)"
+        
+    # 2. 검색된 URL에서 정보 추출
     camps_data = []
+    extracted_count = 0
     
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         # 봇 탐지 우회를 위한 User-Agent
         page = browser.new_page(user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-        
-        # 1. Playwright를 이용한 Yahoo 검색
-        def search_yahoo(query, max_res=5):
-            print(f"Searching Yahoo for: {query}")
-            try:
-                search_url = f"https://search.yahoo.com/search?p={urllib.parse.quote(query)}"
-                page.goto(search_url, timeout=30000)
-                page.wait_for_selector("div.compTitle a", timeout=10000)
-                
-                # Extract links
-                links = page.query_selector_all("div.compTitle a")
-                found = 0
-                for link in links:
-                    if found >= max_res: break
-                    href = link.get_attribute("href")
-                    if href and "RU=" in href:
-                        real_url = urllib.parse.unquote(href.split("RU=")[1].split("/RK=")[0])
-                        if real_url.startswith("http") and "yahoo.com" not in real_url:
-                            target_urls.add(real_url)
-                            found += 1
-            except Exception as e:
-                print(f"Search failed for {query}: {e}")
-
-        search_yahoo(search_query_kr, 5)
-        search_yahoo(search_query_en, 5)
-        
-        target_urls = list(target_urls)
-        print(f"Found {len(target_urls)} unique URLs: {target_urls}")
-        
-        if len(target_urls) == 0:
-            global_status = "검색된 링크 0개 (Yahoo 차단 또는 결과 없음)"
-            
-        # 2. 검색된 URL에서 정보 추출
-        extracted_count = 0
         for url in target_urls:
             try:
                 page.goto(url, timeout=30000)
