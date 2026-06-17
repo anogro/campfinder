@@ -37,8 +37,17 @@ export default function AdminDashboard() {
   const triggerCrawler = async () => {
     setTriggering(true);
     try {
-      // In a real app, this would be an API route that securely uses the GITHUB_TOKEN
-      alert(`크롤러 실행 요청됨: ${city}, ${year}, ${season}\n(실제 실행은 API Route와 Github Token 연결 필요)`);
+      const res = await fetch('/api/trigger-crawler', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ city, year, season })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        alert(data.message + ' (약 1분 후 새로고침 해보세요)');
+      } else {
+        alert('크롤러 실행 실패: ' + data.message);
+      }
     } catch (err) {
       console.error(err);
     } finally {
