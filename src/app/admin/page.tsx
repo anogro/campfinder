@@ -14,10 +14,28 @@ export default function AdminDashboard() {
   const [year, setYear] = useState('2026');
   const [season, setSeason] = useState('여름방학');
   const [triggering, setTriggering] = useState(false);
+  const [crawlLogs, setCrawlLogs] = useState<any[]>([]);
+  const [loadingLogs, setLoadingLogs] = useState(false);
 
   useEffect(() => {
     fetchData();
+    fetchLogs();
   }, []);
+
+  const fetchLogs = async () => {
+    setLoadingLogs(true);
+    try {
+      const res = await fetch('/api/crawl-logs');
+      const json = await res.json();
+      if (json.status === 'success') {
+        setCrawlLogs(json.data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch logs', err);
+    } finally {
+      setLoadingLogs(false);
+    }
+  };
 
   const fetchData = async () => {
     setLoading(true);
@@ -44,7 +62,7 @@ export default function AdminDashboard() {
       });
       const data = await res.json();
       if (res.ok) {
-        alert(data.message + ' (약 1분 후 새로고침 해보세요)');
+        alert('크롤링이 백그라운드에서 시작되었습니다. 완료까지 최대 5분이 소요될 수 있습니다.\n잠시 후 "최근 기록 새로고침" 버튼을 눌러 확인하세요.');
       } else {
         alert('크롤러 실행 실패: ' + data.message);
       }
@@ -96,10 +114,51 @@ export default function AdminDashboard() {
             <button 
               onClick={triggerCrawler}
               disabled={triggering}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium transition-colors h-[42px] flex items-center gap-2"
+              className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium transition-colors h-[42px] flex items-center gap-2 disabled:bg-slate-400"
             >
-              {triggering ? '요청 중...' : '크롤링 시작'}
+              {triggering ? '요청 전송 중...' : '크롤링 시작'}
             </button>
+          </div>
+        </div>
+
+        {/* Crawl Logs Table */}
+        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+          <div className="p-6 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-800/50">
+            <h2 className="text-lg font-semibold flex items-center gap-2">
+              <Clock size={20} className="text-slate-500" />
+              최근 크롤링 기록
+            </h2>
+            <button 
+              onClick={fetchLogs}
+              disabled={loadingLogs}
+              className="text-sm bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 px-4 py-2 rounded-lg font-medium hover:bg-slate-50 dark:hover:bg-slate-600 transition-colors"
+            >
+              {loadingLogs ? '불러오는 중...' : '기록 새로고침'}
+            </button>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm text-left">
+              <thead className="text-xs text-slate-500 bg-slate-50 dark:bg-slate-800 dark:text-slate-400 uppercase border-b dark:border-slate-700">
+                <tr>
+                  <th className="px-6 py-3">실행 일시</th>
+                  <th className="px-6 py-3">수집 키워드</th>
+                  <th className="px-6 py-3">수집 데이터 건수</th>
+                  <th className="px-6 py-3">상태</th>
+                </tr>
+              </thead>
+              <tbody>
+                {crawlLogs.length === 0 ? (
+                  <tr><td colSpan={4} className="text-center py-6 text-slate-500">최근 크롤링 기록이 없습니다.</td></tr>
+                ) : crawlLogs.map((log, idx) => (
+                  <tr key={idx} className="border-b dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50">
+                    <td className="px-6 py-4 font-medium">{log.time}</td>
+                    <td className="px-6 py-4">{log.query}</td>
+                    <td className="px-6 py-4 text-blue-600 font-semibold">{log.count}건</td>
+                    <td className="px-6 py-4">{log.status}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
 

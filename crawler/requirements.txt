@@ -3,5 +3,4 @@ beautifulsoup4
 google-generativeai
 gspread
 google-auth
-googlesearch-python
-youtube-search-python
+duckduckgo-search

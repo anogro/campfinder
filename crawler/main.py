@@ -8,8 +8,7 @@ from bs4 import BeautifulSoup
 import google.generativeai as genai
 from playwright.sync_api import sync_playwright
 import datetime
-from googlesearch import search as google_search
-from youtubesearchpython import VideosSearch
+from duckduckgo_search import DDGS
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Overseas Camp Crawler")
@@ -89,31 +88,20 @@ def main():
     
     target_urls = set()
     
-    # Google Search
+    # DuckDuckGo Search
     try:
-        print("Searching Google (Korean)...")
-        for url in google_search(search_query_kr, num=5, stop=5, pause=2):
-            target_urls.add(url)
-            
-        print("Searching Google (English)...")
-        for url in google_search(search_query_en, num=5, stop=5, pause=2):
-            target_urls.add(url)
+        with DDGS() as ddgs:
+            print("Searching DuckDuckGo (Korean)...")
+            results_kr = list(ddgs.text(search_query_kr, max_results=5))
+            for r in results_kr:
+                target_urls.add(r['href'])
+                
+            print("Searching DuckDuckGo (English)...")
+            results_en = list(ddgs.text(search_query_en, max_results=5))
+            for r in results_en:
+                target_urls.add(r['href'])
     except Exception as e:
-        print(f"Google search failed: {e}")
-        
-    # YouTube Search
-    try:
-        print("Searching YouTube (Korean)...")
-        yt_kr = VideosSearch(search_query_kr, limit=2).result()
-        for video in yt_kr.get('result', []):
-            target_urls.add(video['link'])
-            
-        print("Searching YouTube (English)...")
-        yt_en = VideosSearch(search_query_en, limit=2).result()
-        for video in yt_en.get('result', []):
-            target_urls.add(video['link'])
-    except Exception as e:
-        print(f"YouTube search failed: {e}")
+        print(f"DuckDuckGo search failed: {e}")
         
     target_urls = list(target_urls)
     print(f"Found {len(target_urls)} unique URLs: {target_urls}")
