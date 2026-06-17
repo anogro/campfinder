@@ -3,4 +3,5 @@ beautifulsoup4
 openai
 gspread
 google-auth
-duckduckgo-search
+googlesearch-python
+youtube-search-python

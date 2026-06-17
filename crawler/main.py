@@ -8,7 +8,8 @@ from bs4 import BeautifulSoup
 from openai import OpenAI
 from playwright.sync_api import sync_playwright
 import datetime
-from duckduckgo_search import DDGS
+from googlesearch import search as google_search
+from youtubesearchpython import VideosSearch
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Overseas Camp Crawler")
@@ -80,15 +81,27 @@ def main():
     print(f"Starting crawl for {args.city}, {args.year}, {args.season}...")
     
     search_query = f"{args.year} {args.season} {args.city} 영어 캠프"
-    print(f"Searching for: {search_query}")
+    print(f"Searching Google and YouTube for: {search_query}")
     
     target_urls = []
+    
+    # Google Search
     try:
-        with DDGS() as ddgs:
-            results = list(ddgs.text(search_query, max_results=3))
-            target_urls = [r['href'] for r in results]
+        print("Searching Google...")
+        for url in google_search(search_query, num=3, stop=3, pause=2):
+            target_urls.append(url)
     except Exception as e:
-        print(f"Search failed: {e}")
+        print(f"Google search failed: {e}")
+        
+    # YouTube Search
+    try:
+        print("Searching YouTube...")
+        videos_search = VideosSearch(search_query, limit=2)
+        yt_results = videos_search.result()
+        for video in yt_results.get('result', []):
+            target_urls.append(video['link'])
+    except Exception as e:
+        print(f"YouTube search failed: {e}")
         
     print(f"Found URLs: {target_urls}")
     
