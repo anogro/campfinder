@@ -1,12 +1,14 @@
 import argparse
 import os
 import json
+import time
 import gspread
 from google.oauth2.service_account import Credentials
 from bs4 import BeautifulSoup
 from openai import OpenAI
 from playwright.sync_api import sync_playwright
 import datetime
+from duckduckgo_search import DDGS
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Overseas Camp Crawler")
@@ -77,21 +79,36 @@ def main():
     args = parse_args()
     print(f"Starting crawl for {args.city}, {args.year}, {args.season}...")
     
-    target_urls = [
-        "https://example.com/camp1"
-    ]
+    search_query = f"{args.year} {args.season} {args.city} 영어 캠프"
+    print(f"Searching for: {search_query}")
+    
+    target_urls = []
+    try:
+        with DDGS() as ddgs:
+            results = list(ddgs.text(search_query, max_results=3))
+            target_urls = [r['href'] for r in results]
+    except Exception as e:
+        print(f"Search failed: {e}")
+        
+    print(f"Found URLs: {target_urls}")
     
     camps_data = []
     
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
-        page = browser.new_page()
+        page = browser.new_page(user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
         for url in target_urls:
             try:
                 page.goto(url, timeout=30000)
+                # Wait for page to load
+                time.sleep(3)
                 html_content = page.content()
                 cleaned_text = extract_text_with_bs4(html_content)
                 
+                if len(cleaned_text) < 100:
+                    print(f"Skipping {url}: Not enough text content.")
+                    continue
+                    
                 print(f"Analyzing content from {url}...")
                 llm_result = analyze_with_llm(cleaned_text)
                 llm_result["sourceUrl"] = url
