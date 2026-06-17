@@ -105,36 +105,36 @@ def main():
         # 봇 탐지 우회를 위한 User-Agent
         page = browser.new_page(user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
         
-        # 1. Playwright를 이용한 DuckDuckGo Lite 검색
-        def search_ddg_lite(query, max_res=5):
-            print(f"Searching DuckDuckGo Lite for: {query}")
+        # 1. Playwright를 이용한 Yahoo 검색
+        def search_yahoo(query, max_res=5):
+            print(f"Searching Yahoo for: {query}")
             try:
-                search_url = f"https://lite.duckduckgo.com/lite/"
+                search_url = f"https://search.yahoo.com/search?p={urllib.parse.quote(query)}"
                 page.goto(search_url, timeout=30000)
-                page.fill("input[name='q']", query)
-                page.click("input[type='submit']")
-                page.wait_for_selector(".result-link", timeout=10000)
+                page.wait_for_selector("div.compTitle a", timeout=10000)
                 
                 # Extract links
-                links = page.query_selector_all("a.result-link")
+                links = page.query_selector_all("div.compTitle a")
                 found = 0
                 for link in links:
                     if found >= max_res: break
                     href = link.get_attribute("href")
-                    if href and "http" in href:
-                        target_urls.add(href)
-                        found += 1
+                    if href and "RU=" in href:
+                        real_url = urllib.parse.unquote(href.split("RU=")[1].split("/RK=")[0])
+                        if real_url.startswith("http") and "yahoo.com" not in real_url:
+                            target_urls.add(real_url)
+                            found += 1
             except Exception as e:
                 print(f"Search failed for {query}: {e}")
 
-        search_ddg_lite(search_query_kr, 5)
-        search_ddg_lite(search_query_en, 5)
+        search_yahoo(search_query_kr, 5)
+        search_yahoo(search_query_en, 5)
         
         target_urls = list(target_urls)
         print(f"Found {len(target_urls)} unique URLs: {target_urls}")
         
         if len(target_urls) == 0:
-            global_status = "검색된 링크 0개 (차단 또는 결과 없음)"
+            global_status = "검색된 링크 0개 (Yahoo 차단 또는 결과 없음)"
             
         # 2. 검색된 URL에서 정보 추출
         extracted_count = 0
