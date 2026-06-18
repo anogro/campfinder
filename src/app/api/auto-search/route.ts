@@ -28,13 +28,6 @@ export async function POST(request: Request) {
       const response = await fetch(url);
       const data = await response.json();
 
-      if (data.error) {
-        return NextResponse.json(
-          { status: 'error', message: `Google API Error: ${data.error.message}` },
-          { status: 500 }
-        );
-      }
-
       if (data.items) {
         data.items.forEach((item: any) => {
           if (item.link && !links.includes(item.link)) {
