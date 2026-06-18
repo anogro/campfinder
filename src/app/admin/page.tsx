@@ -9,10 +9,6 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [filterInquiry, setFilterInquiry] = useState(false);
   
-  // Crawler Form State
-  const [city, setCity] = useState('KL-01');
-  const [year, setYear] = useState('2026');
-  const [season, setSeason] = useState('여름방학');
   const [triggering, setTriggering] = useState(false);
   const [crawlLogs, setCrawlLogs] = useState<any[]>([]);
   const [loadingLogs, setLoadingLogs] = useState(false);
@@ -58,7 +54,7 @@ export default function AdminDashboard() {
       const res = await fetch('/api/trigger-crawler', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ city, year, season })
+        body: JSON.stringify({})
       });
       const data = await res.json();
       if (res.ok) {
@@ -99,24 +95,13 @@ export default function AdminDashboard() {
             크롤러 파이프라인 실행
           </h2>
           <div className="flex flex-wrap gap-4 items-end">
-            <div className="space-y-1">
-              <label className="text-sm font-medium">도시 ID</label>
-              <input type="text" value={city} onChange={e => setCity(e.target.value)} className="w-full px-3 py-2 border rounded-lg dark:bg-slate-700 dark:border-slate-600" />
-            </div>
-            <div className="space-y-1">
-              <label className="text-sm font-medium">년도</label>
-              <input type="text" value={year} onChange={e => setYear(e.target.value)} className="w-full px-3 py-2 border rounded-lg dark:bg-slate-700 dark:border-slate-600" />
-            </div>
-            <div className="space-y-1">
-              <label className="text-sm font-medium">시즌</label>
-              <input type="text" value={season} onChange={e => setSeason(e.target.value)} className="w-full px-3 py-2 border rounded-lg dark:bg-slate-700 dark:border-slate-600" />
-            </div>
+            <p className="text-sm text-slate-500 mb-2 w-full">구글 시트의 [Target_Links] 탭에 있는 모든 대기열을 순차적으로 크롤링합니다.</p>
             <button 
               onClick={triggerCrawler}
               disabled={triggering}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium transition-colors h-[42px] flex items-center gap-2 disabled:bg-slate-400"
+              className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-lg font-bold text-lg transition-colors flex items-center gap-2 disabled:bg-slate-400 w-full justify-center"
             >
-              {triggering ? '요청 전송 중...' : '크롤링 시작'}
+              {triggering ? '요청 전송 중...' : '대기 중인 모든 링크 크롤링 시작'}
             </button>
           </div>
         </div>

@@ -13,9 +13,9 @@ from googleapiclient.discovery import build
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Overseas Camp Crawler")
-    parser.add_argument("--city", required=True, help="City ID (e.g., KL-01)")
-    parser.add_argument("--year", required=True, help="Year (e.g., 2026)")
-    parser.add_argument("--season", required=True, help="Season (e.g., 여름방학)")
+    parser.add_argument("--city", required=False, default="Unknown", help="City ID (e.g., KL-01)")
+    parser.add_argument("--year", required=False, default="2026", help="Year (e.g., 2026)")
+    parser.add_argument("--season", required=False, default="여름방학", help="Season (e.g., 여름방학)")
     return parser.parse_args()
 
 def extract_text_with_bs4(html_content):
@@ -89,43 +89,54 @@ def connect_to_sheets():
     try:
         target_links_worksheet = sheet.worksheet("Target_Links")
     except gspread.exceptions.WorksheetNotFound:
-        target_links_worksheet = sheet.add_worksheet(title="Target_Links", rows="1000", cols="2")
-        target_links_worksheet.append_row(["URL", "Status"])
+        target_links_worksheet = sheet.add_worksheet(title="Target_Links", rows="1000", cols="5")
+        target_links_worksheet.append_row(["URL", "City", "Year", "Season", "Status"])
     
     return main_worksheet, log_worksheet, target_links_worksheet
 
 def main():
     args = parse_args()
-    print(f"Starting crawl for {args.city}, {args.year}, {args.season}...")
-    
-    search_query_kr = f"{args.year} {args.season} {args.city} 영어 캠프"
-    search_query_en = f"{args.year} {args.season} {args.city} english camp"
-    
-    print(f"Searching for:\n1. {search_query_kr}\n2. {search_query_en}")
+    print("Starting crawl for pending links in Target_Links...")
     
     main_sheet, log_sheet, target_sheet = connect_to_sheets()
     target_data = target_sheet.get_all_values()
     
-    target_urls = []
-    target_row_indices = []
+    existing_camps_data = main_sheet.get_all_values()
+    existing_urls = [row[16] for row in existing_camps_data[1:]] if len(existing_camps_data) > 1 else []
+    
+    target_jobs = [] # list of dict: {url, city, year, season, row_idx}
     
     # Header is row 1. Data starts from row 2
     for idx, row in enumerate(target_data[1:]):
-        url = row[0] if len(row) > 0 else ""
-        status = row[1] if len(row) > 1 else ""
+        url = row[0].strip() if len(row) > 0 else ""
+        city = row[1].strip() if len(row) > 1 else args.city
+        year = row[2].strip() if len(row) > 2 else args.year
+        season = row[3].strip() if len(row) > 3 else args.season
+        status = row[4].strip() if len(row) > 4 else ""
         
-        if url.startswith("http") and status not in ["Done", "Failed", "완료", "실패"]:
-            target_urls.append(url)
-            target_row_indices.append(idx + 2) # gspread uses 1-based indexing
+        # Backward compatibility for old 2-column sheets where status was in column B
+        if status == "" and len(row) > 1 and row[1] in ["Done", "Failed", "완료", "실패"]:
+            status = row[1]
+            
+        if url.startswith("http") and "Done" not in status and status not in ["완료", "실패", "Failed"]:
+            if url in existing_urls:
+                target_sheet.update_cell(idx + 2, 5, "Done (Duplicated)")
+                print(f"Skipping {url}: Already exists in Camps sheet.")
+                continue
+            target_jobs.append({
+                "url": url, "city": city, "year": year, "season": season, "row_idx": idx + 2
+            })
             
     global_status = "성공"
-    print(f"Found {len(target_urls)} pending URLs in Target_Links sheet.")
+    print(f"Found {len(target_jobs)} pending URLs in Target_Links sheet.")
     
-    if len(target_urls) == 0:
+    if len(target_jobs) == 0:
         global_status = "수집할 링크 없음 (Target_Links 시트를 확인하세요)"
+        kst = datetime.timezone(datetime.timedelta(hours=9))
+        formatted_time = datetime.datetime.now(kst).strftime('%Y-%m-%d %H:%M')
         log_sheet.append_row([
-            str(datetime.datetime.now()),
-            f"{args.city}, {args.year}, {args.season}",
+            formatted_time,
+            "전체 링크",
             0,
             global_status
         ])
@@ -141,7 +152,8 @@ def main():
         browser = p.chromium.launch(headless=True)
         # 봇 탐지 우회를 위한 User-Agent
         page = browser.new_page(user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-        for url in target_urls:
+        for job in target_jobs:
+            url = job["url"]
             try:
                 page.goto(url, timeout=30000)
                 time.sleep(3)
@@ -150,6 +162,7 @@ def main():
                 
                 if len(cleaned_text) < 100:
                     print(f"Skipping {url}: Not enough text content (len: {len(cleaned_text)}).")
+                    url_results[url] = "Failed (No text)"
                     continue
                     
                 print(f"Analyzing content from {url}...")
@@ -157,36 +170,37 @@ def main():
                 llm_result["sourceUrl"] = url
                 llm_result["imageUrl"] = "default_camp.png"
                 
+                # Append job info to the result for saving
+                llm_result["_city"] = job["city"]
+                llm_result["_year"] = job["year"]
+                llm_result["_season"] = job["season"]
                 
                 camps_data.append(llm_result)
                 extracted_count += 1
                 url_results[url] = "Done"
             except Exception as e:
                 print(f"Failed to process {url}: {e}")
-                url_results[url] = "Failed"
+                url_results[url] = "Failed (Error)"
                 global_status = "분석 중 일부 오류 발생"
                 
         browser.close()
 
     try:
-        
-        existing_data = main_sheet.get_all_values()
-        existing_urls = [row[16] for row in existing_data[1:]] if len(existing_data) > 1 else []
-        
         added_count = 0
         new_rows = []
         
         for camp in camps_data:
-            if camp.get("sourceUrl") in existing_urls:
-                continue
-                
-            next_index = (len(existing_data) - 1 if len(existing_data) > 0 else 0) + added_count
-            program_id = f"PROG-{args.year}-{args.city}-{str(next_index).zfill(3)}"
+            city = camp.get("_city", args.city)
+            year = camp.get("_year", args.year)
+            season = camp.get("_season", args.season)
+            
+            next_index = (len(existing_camps_data) - 1 if len(existing_camps_data) > 0 else 0) + added_count
+            program_id = f"PROG-{year}-{city}-{str(next_index).zfill(3)}"
             
             new_rows.append([
                 program_id,
-                args.city,
-                f"{args.year}_{args.season}",
+                city,
+                f"{year}_{season}",
                 camp.get("programName", "문의 필요"),
                 camp.get("place", "문의 필요"),
                 camp.get("seller", "문의 필요"),
@@ -210,17 +224,18 @@ def main():
             main_sheet.append_rows(new_rows)
             
         # Update Target_Links status
-        for idx, row_idx in enumerate(target_row_indices):
-            url = target_urls[idx]
-            status = url_results.get(url, "Failed")
-            target_sheet.update_cell(row_idx, 2, status)
+        for job in target_jobs:
+            url = job["url"]
+            row_idx = job["row_idx"]
+            status = url_results.get(url, "Failed (Unknown)")
+            target_sheet.update_cell(row_idx, 5, status)
             
         # Update status if 0 items added but no errors
         if added_count == 0:
             if len(camps_data) > 0:
                 global_status = "성공 (모두 중복된 데이터)"
-            elif len(target_urls) > 0:
-                global_status = f"성공 (링크 {len(target_urls)}개 중 분석 가능한 캠프 없음)"
+            elif len(target_jobs) > 0:
+                global_status = f"성공 (링크 {len(target_jobs)}개 중 분석 가능한 캠프 없음)"
             elif global_status == "성공":
                 global_status = "성공 (처리된 링크 없음)"
 
@@ -230,7 +245,7 @@ def main():
         
         log_sheet.append_row([
             formatted_time,
-            f"{args.city}, {args.year}, {args.season}",
+            f"일괄 수집 ({added_count}건)",
             added_count,
             global_status
         ])

@@ -2,19 +2,6 @@ name: Run Camp Crawler
 
 on:
   workflow_dispatch:
-    inputs:
-      city:
-        description: 'City ID (e.g., KL-01)'
-        required: true
-        default: 'KL-01'
-      year:
-        description: 'Year (e.g., 2026)'
-        required: true
-        default: '2026'
-      season:
-        description: 'Season (e.g., 여름방학)'
-        required: true
-        default: '여름방학'
   repository_dispatch:
     types: [trigger-crawler]
 
@@ -42,12 +29,6 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GOOGLE_CREDENTIALS_JSON: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
           GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
-          GOOGLE_SEARCH_API_KEY: ${{ secrets.GOOGLE_SEARCH_API_KEY }}
-          GOOGLE_SEARCH_CX: ${{ secrets.GOOGLE_SEARCH_CX }}
         run: |
           cd crawler
-          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-            python main.py --city "${{ github.event.inputs.city }}" --year "${{ github.event.inputs.year }}" --season "${{ github.event.inputs.season }}"
-          elif [ "${{ github.event_name }}" == "repository_dispatch" ]; then
-            python main.py --city "${{ github.event.client_payload.city }}" --year "${{ github.event.client_payload.year }}" --season "${{ github.event.client_payload.season }}"
-          fi
+          python main.py

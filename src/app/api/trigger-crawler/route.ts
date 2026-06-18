@@ -2,8 +2,7 @@ import { NextResponse } from 'next/server';
 
 export async function POST(request: Request) {
   try {
-    const { city, year, season } = await request.json();
-    
+    // Body 파싱 불필요
     const githubToken = process.env.GITHUB_TOKEN;
     if (!githubToken || githubToken === 'ghp_your_github_token') {
       return NextResponse.json(
@@ -23,12 +22,7 @@ export async function POST(request: Request) {
           'X-GitHub-Api-Version': '2022-11-28',
         },
         body: JSON.stringify({
-          ref: 'main',
-          inputs: {
-            city: city,
-            year: year,
-            season: season,
-          },
+          ref: 'main'
         }),
       }
     );
