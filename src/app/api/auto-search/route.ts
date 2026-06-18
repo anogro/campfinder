@@ -14,7 +14,7 @@ export async function POST(request: Request) {
 
     if (!apiKey || !cx) {
       return NextResponse.json(
-        { status: 'error', message: 'Google Search API keys are missing in environment variables' },
+        { status: 'error', message: 'Google Search API keys are missing in Vercel env' },
         { status: 500 }
       );
     }
