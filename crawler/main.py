@@ -101,6 +101,24 @@ def main():
     main_sheet, log_sheet, target_sheet = connect_to_sheets()
     target_data = target_sheet.get_all_values()
     
+    # 탭 초기화 (헤더가 없거나 1줄인데 옛날 헤더인 경우)
+    if len(target_data) == 0 or (len(target_data) > 0 and len(target_data[0]) < 5):
+        target_sheet.update('A1:E1', [["URL", "City", "Year", "Season", "Status"]])
+        target_data = target_sheet.get_all_values()
+        
+    # 샘플 링크 자동 삽입 (비어있을 경우 1회만 실행)
+    if len(target_data) <= 1:
+        print("Target_Links sheet is empty. Auto-populating with 5 sample Cebu 2026 Summer camps...")
+        initial_links = [
+            ["https://www.uhakfinder.com/phl/school_detail.php?school_uid=51", "KL-01", "2026", "여름방학", ""],
+            ["https://www.uhakpeople.com/philippines/cebu", "KL-01", "2026", "여름방학", ""],
+            ["https://www.ucas.co.kr/cebu", "KL-01", "2026", "여름방학", ""],
+            ["https://sel-academy.com/", "KL-01", "2026", "여름방학", ""],
+            ["https://winningenglishschool.com/", "KL-01", "2026", "여름방학", ""]
+        ]
+        target_sheet.append_rows(initial_links)
+        target_data = target_sheet.get_all_values() # Refresh
+    
     existing_camps_data = main_sheet.get_all_values()
     existing_urls = [row[16] for row in existing_camps_data[1:]] if len(existing_camps_data) > 1 else []
     
