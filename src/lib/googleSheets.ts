@@ -16,7 +16,7 @@ export async function getCampsData(): Promise<{ status: string; data?: CampData[
         client_email: clientEmail,
         private_key: privateKey,
       },
-      scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
+      scopes: ['https://www.googleapis.com/auth/spreadsheets'],
     });
 
     const sheets = google.sheets({ version: 'v4', auth });
@@ -43,6 +43,42 @@ export async function getCampsData(): Promise<{ status: string; data?: CampData[
     return { status: 'success', data };
   } catch (error: any) {
     console.error('Google Sheets API Error:', error);
+    return { status: 'error', message: error.message };
+  }
+}
+
+export async function appendTargetLinks(links: any[][]): Promise<{ status: string; message?: string }> {
+  try {
+    const clientEmail = process.env.GOOGLE_CLIENT_EMAIL;
+    const privateKey = process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n');
+    const sheetId = process.env.GOOGLE_SHEET_ID;
+
+    if (!clientEmail || !privateKey || !sheetId) {
+      return { status: 'error', message: 'Google Credentials are not properly configured.' };
+    }
+
+    const auth = new google.auth.GoogleAuth({
+      credentials: {
+        client_email: clientEmail,
+        private_key: privateKey,
+      },
+      scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+    });
+
+    const sheets = google.sheets({ version: 'v4', auth });
+    
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: sheetId,
+      range: 'Target_Links!A:E',
+      valueInputOption: 'USER_ENTERED',
+      requestBody: {
+        values: links,
+      },
+    });
+
+    return { status: 'success' };
+  } catch (error: any) {
+    console.error('Google Sheets Append Error:', error);
     return { status: 'error', message: error.message };
   }
 }
