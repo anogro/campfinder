@@ -110,11 +110,11 @@ def main():
     if len(target_data) <= 1:
         print("Target_Links sheet is empty. Auto-populating with 5 sample Cebu 2026 Summer camps...")
         initial_links = [
-            ["https://www.uhakfinder.com/phl/school_detail.php?school_uid=51", "KL-01", "2026", "여름방학", ""],
-            ["https://www.uhakpeople.com/philippines/cebu", "KL-01", "2026", "여름방학", ""],
-            ["https://www.ucas.co.kr/cebu", "KL-01", "2026", "여름방학", ""],
-            ["https://sel-academy.com/", "KL-01", "2026", "여름방학", ""],
-            ["https://winningenglishschool.com/", "KL-01", "2026", "여름방학", ""]
+            ["https://www.uhakfinder.com/phl/school_detail.php?school_uid=51", "cebu", "2026", "여름방학", ""],
+            ["https://www.uhakpeople.com/philippines/cebu", "cebu", "2026", "여름방학", ""],
+            ["https://www.ucas.co.kr/cebu", "cebu", "2026", "여름방학", ""],
+            ["https://sel-academy.com/", "cebu", "2026", "여름방학", ""],
+            ["https://winningenglishschool.com/", "cebu", "2026", "여름방학", ""]
         ]
         target_sheet.append_rows(initial_links)
         target_data = target_sheet.get_all_values() # Refresh
@@ -197,8 +197,9 @@ def main():
                 extracted_count += 1
                 url_results[url] = "Done"
             except Exception as e:
+                error_msg = str(e)[:100] # 너무 길면 잘라서 저장
                 print(f"Failed to process {url}: {e}")
-                url_results[url] = "Failed (Error)"
+                url_results[url] = f"Failed ({error_msg})"
                 global_status = "분석 중 일부 오류 발생"
                 
         browser.close()
