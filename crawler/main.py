@@ -86,7 +86,13 @@ def connect_to_sheets():
     main_worksheet = sheet.worksheet("Camps")
     log_worksheet = sheet.worksheet("Crawl_Log")
     
-    return main_worksheet, log_worksheet
+    try:
+        target_links_worksheet = sheet.worksheet("Target_Links")
+    except gspread.exceptions.WorksheetNotFound:
+        target_links_worksheet = sheet.add_worksheet(title="Target_Links", rows="1000", cols="2")
+        target_links_worksheet.append_row(["URL", "Status"])
+    
+    return main_worksheet, log_worksheet, target_links_worksheet
 
 def main():
     args = parse_args()
@@ -97,44 +103,39 @@ def main():
     
     print(f"Searching for:\n1. {search_query_kr}\n2. {search_query_en}")
     
-    target_urls = set()
+    main_sheet, log_sheet, target_sheet = connect_to_sheets()
+    target_data = target_sheet.get_all_values()
+    
+    target_urls = []
+    target_row_indices = []
+    
+    # Header is row 1. Data starts from row 2
+    for idx, row in enumerate(target_data[1:]):
+        url = row[0] if len(row) > 0 else ""
+        status = row[1] if len(row) > 1 else ""
+        
+        if url.startswith("http") and status not in ["Done", "Failed", "완료", "실패"]:
+            target_urls.append(url)
+            target_row_indices.append(idx + 2) # gspread uses 1-based indexing
+            
     global_status = "성공"
-    # 1. urllib + BeautifulSoup을 이용한 Yahoo 검색 (API 필요 없음, 차단 면역)
-    def search_yahoo_urllib(query, max_res=5):
-        print(f"Searching Yahoo for: {query}")
-        try:
-            url = f"https://search.yahoo.com/search?p={urllib.parse.quote(query)}"
-            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'})
-            html = urllib.request.urlopen(req, timeout=10).read().decode('utf-8', errors='ignore')
-            soup = BeautifulSoup(html, 'html.parser')
-            
-            links = soup.select('div.compTitle a')
-            found = 0
-            for a in links:
-                if found >= max_res: break
-                href = a.get('href', '')
-                if 'RU=' in href:
-                    real_url = urllib.parse.unquote(href.split('RU=')[1].split('/RK=')[0])
-                    if real_url.startswith('http') and 'yahoo.com' not in real_url:
-                        target_urls.add(real_url)
-                        found += 1
-            return found
-        except Exception as e:
-            print(f"Yahoo Search failed: {e}")
-            return 0
-
-    search_yahoo_urllib(search_query_kr, 5)
-    search_yahoo_urllib(search_query_en, 5)
-            
-    target_urls = list(target_urls)
-    print(f"Found {len(target_urls)} unique URLs: {target_urls}")
+    print(f"Found {len(target_urls)} pending URLs in Target_Links sheet.")
     
     if len(target_urls) == 0:
-        global_status = "검색된 링크 0개 (Yahoo 차단 또는 결과 없음)"
+        global_status = "수집할 링크 없음 (Target_Links 시트를 확인하세요)"
+        log_sheet.append_row([
+            str(datetime.datetime.now()),
+            f"{args.city}, {args.year}, {args.season}",
+            0,
+            global_status
+        ])
+        print(global_status)
+        return
         
     # 2. 검색된 URL에서 정보 추출
     camps_data = []
     extracted_count = 0
+    url_results = {} # url -> status
     
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
@@ -156,16 +157,18 @@ def main():
                 llm_result["sourceUrl"] = url
                 llm_result["imageUrl"] = "default_camp.png"
                 
+                
                 camps_data.append(llm_result)
                 extracted_count += 1
+                url_results[url] = "Done"
             except Exception as e:
                 print(f"Failed to process {url}: {e}")
+                url_results[url] = "Failed"
                 global_status = "분석 중 일부 오류 발생"
                 
         browser.close()
 
     try:
-        main_sheet, log_sheet = connect_to_sheets()
         
         existing_data = main_sheet.get_all_values()
         existing_urls = [row[16] for row in existing_data[1:]] if len(existing_data) > 1 else []
@@ -206,6 +209,12 @@ def main():
         if new_rows:
             main_sheet.append_rows(new_rows)
             
+        # Update Target_Links status
+        for idx, row_idx in enumerate(target_row_indices):
+            url = target_urls[idx]
+            status = url_results.get(url, "Failed")
+            target_sheet.update_cell(row_idx, 2, status)
+            
         # Update status if 0 items added but no errors
         if added_count == 0:
             if len(camps_data) > 0:
@@ -213,7 +222,7 @@ def main():
             elif len(target_urls) > 0:
                 global_status = f"성공 (링크 {len(target_urls)}개 중 분석 가능한 캠프 없음)"
             elif global_status == "성공":
-                global_status = "성공 (검색된 링크 없음)"
+                global_status = "성공 (처리된 링크 없음)"
 
         # Add log
         log_sheet.append_row([
