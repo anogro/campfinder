@@ -225,8 +225,11 @@ def main():
                 global_status = "성공 (처리된 링크 없음)"
 
         # Add log
+        kst = datetime.timezone(datetime.timedelta(hours=9))
+        formatted_time = datetime.datetime.now(kst).strftime('%Y-%m-%d %H:%M')
+        
         log_sheet.append_row([
-            str(datetime.datetime.now()),
+            formatted_time,
             f"{args.city}, {args.year}, {args.season}",
             added_count,
             global_status
