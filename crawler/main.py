@@ -99,40 +99,38 @@ def main():
     
     target_urls = set()
     global_status = "성공"
-    # 1. Google Custom Search API를 이용한 검색
-    api_key = os.environ.get("GOOGLE_SEARCH_API_KEY", "").strip()
-    cx = os.environ.get("GOOGLE_SEARCH_CX", "").strip()
-    
-    if not api_key or not cx:
-        print("GOOGLE_SEARCH_API_KEY or GOOGLE_SEARCH_CX not set. Skip search.")
-        global_status = "오류: 검색 API 키가 설정되지 않음"
-    else:
+    # 1. urllib + BeautifulSoup을 이용한 Yahoo 검색 (API 필요 없음, 차단 면역)
+    def search_yahoo_urllib(query, max_res=5):
+        print(f"Searching Yahoo for: {query}")
         try:
-            service = build("customsearch", "v1", developerKey=api_key)
+            url = f"https://search.yahoo.com/search?p={urllib.parse.quote(query)}"
+            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'})
+            html = urllib.request.urlopen(req, timeout=10).read().decode('utf-8', errors='ignore')
+            soup = BeautifulSoup(html, 'html.parser')
             
-            def search_google_api(query, max_res=5):
-                print(f"Searching Google API for: {query}")
-                res = service.cse().list(q=query, cx=cx, num=max_res).execute()
-                found = 0
-                for item in res.get('items', []):
-                    link = item.get('link')
-                    if link:
-                        target_urls.add(link)
+            links = soup.select('div.compTitle a')
+            found = 0
+            for a in links:
+                if found >= max_res: break
+                href = a.get('href', '')
+                if 'RU=' in href:
+                    real_url = urllib.parse.unquote(href.split('RU=')[1].split('/RK=')[0])
+                    if real_url.startswith('http') and 'yahoo.com' not in real_url:
+                        target_urls.add(real_url)
                         found += 1
-                return found
-
-            search_google_api(search_query_kr, 5)
-            search_google_api(search_query_en, 5)
-            
+            return found
         except Exception as e:
-            print(f"Google Search API failed: {e}")
-            global_status = f"구글 검색 API 오류: {str(e)[:500]}"
+            print(f"Yahoo Search failed: {e}")
+            return 0
+
+    search_yahoo_urllib(search_query_kr, 5)
+    search_yahoo_urllib(search_query_en, 5)
             
     target_urls = list(target_urls)
     print(f"Found {len(target_urls)} unique URLs: {target_urls}")
     
-    if len(target_urls) == 0 and global_status == "성공":
-        global_status = "검색된 링크 0개 (결과 없음)"
+    if len(target_urls) == 0:
+        global_status = "검색된 링크 0개 (Yahoo 차단 또는 결과 없음)"
         
     # 2. 검색된 URL에서 정보 추출
     camps_data = []
