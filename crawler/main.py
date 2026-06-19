@@ -101,7 +101,15 @@ def get_google_creds():
     
     client_email = os.environ.get("GOOGLE_CLIENT_EMAIL")
     private_key = os.environ.get("GOOGLE_PRIVATE_KEY")
+    creds_json_str = os.environ.get("GOOGLE_CREDENTIALS_JSON")
     
+    if creds_json_str:
+        try:
+            creds_dict = json.loads(creds_json_str)
+            return Credentials.from_service_account_info(creds_dict, scopes=scopes)
+        except Exception as e:
+            raise ValueError(f"Failed to parse GOOGLE_CREDENTIALS_JSON: {e}")
+            
     if client_email and private_key:
         private_key = private_key.replace('\\n', '\n')
         creds_dict = {
@@ -116,6 +124,7 @@ def get_google_creds():
             "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
             "client_x509_cert_url": f"https://www.googleapis.com/robot/v1/metadata/x509/{urllib.parse.quote(client_email)}"
         }
+        return Credentials.from_service_account_info(creds_dict, scopes=scopes)
     else:
         raise ValueError("Google credentials are not set in environment variables.")
         
