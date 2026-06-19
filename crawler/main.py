@@ -88,6 +88,14 @@ def analyze_with_llm(text_content):
     try:
         response = model.generate_content(full_prompt)
         res_text = response.text.strip()
+        if res_text.startswith("```json"):
+            res_text = res_text[7:]
+        elif res_text.startswith("```"):
+            res_text = res_text[3:]
+        if res_text.endswith("```"):
+            res_text = res_text[:-3]
+        res_text = res_text.strip()
+        
         return json.loads(res_text)
     except Exception as e:
         print(f"LLM Error: {e}")
