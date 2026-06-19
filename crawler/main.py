@@ -88,7 +88,7 @@ def analyze_with_llm(text_content):
     }
     """
     
-    model = genai.GenerativeModel('gemini-1.5-flash', generation_config={"response_mime_type": "application/json"})
+    model = genai.GenerativeModel('gemini-1.5-flash-latest', generation_config={"response_mime_type": "application/json"})
     full_prompt = prompt + "\n\n[웹페이지 텍스트]\n" + text_content[:20000]
     
     try:
