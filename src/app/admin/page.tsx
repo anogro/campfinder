@@ -12,13 +12,6 @@ export default function AdminDashboard() {
   const [triggering, setTriggering] = useState(false);
   const [crawlLogs, setCrawlLogs] = useState<any[]>([]);
   const [loadingLogs, setLoadingLogs] = useState(false);
-
-  // Auto Search State
-  const [city, setCity] = useState('cebu');
-  const [year, setYear] = useState('2026');
-  const [season, setSeason] = useState('여름방학');
-  const [searching, setSearching] = useState(false);
-
   useEffect(() => {
     fetchData();
     fetchLogs();
@@ -75,32 +68,6 @@ export default function AdminDashboard() {
     }
   };
 
-  const autoSearch = async () => {
-    if (!city || !year || !season) {
-      alert('도시명, 연도, 시즌을 모두 입력해주세요.');
-      return;
-    }
-    setSearching(true);
-    try {
-      const res = await fetch('/api/auto-search', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ city, year, season })
-      });
-      const data = await res.json();
-      if (res.ok) {
-        alert(`검색 성공! ${data.count}개의 링크를 찾아 구글 시트 대기열에 추가했습니다.`);
-      } else {
-        alert('자동 검색 실패: ' + data.message);
-      }
-    } catch (err) {
-      console.error(err);
-      alert('API 호출 중 오류가 발생했습니다.');
-    } finally {
-      setSearching(false);
-    }
-  };
-
   const filteredCamps = camps.filter(camp => {
     if (filterInquiry) {
       return Object.values(camp).some(val => val === '문의 필요');
@@ -120,40 +87,11 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        {/* Search & Queue Card */}
-        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
-          <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-            <Filter size={20} className="text-green-500" />
-            1단계: 자동 검색 및 대기열 추가
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-            <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">도시</label>
-              <input type="text" value={city} onChange={e => setCity(e.target.value)} placeholder="예: cebu 또는 마닐라" className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">연도</label>
-              <input type="text" value={year} onChange={e => setYear(e.target.value)} className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">시즌</label>
-              <input type="text" value={season} onChange={e => setSeason(e.target.value)} className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white" />
-            </div>
-          </div>
-          <button 
-            onClick={autoSearch}
-            disabled={searching}
-            className="bg-green-600 hover:bg-green-700 text-white px-8 py-3 rounded-lg font-bold text-lg transition-colors flex items-center gap-2 disabled:bg-slate-400 w-full justify-center"
-          >
-            {searching ? '인터넷 검색 및 엑셀 적재 중...' : `구글에서 20개 자동 검색 후 엑셀 대기열에 넣기`}
-          </button>
-        </div>
-
         {/* Crawler Trigger Card */}
         <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
           <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
             <Play size={20} className="text-blue-500" />
-            2단계: 크롤러 파이프라인 실행
+            크롤러 파이프라인 실행
           </h2>
           <div className="flex flex-wrap gap-4 items-end">
             <p className="text-sm text-slate-500 mb-2 w-full">구글 시트의 [Target_Links] 탭에 있는 모든 대기열을 순차적으로 크롤링합니다.</p>
