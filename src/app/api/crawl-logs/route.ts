@@ -21,10 +21,10 @@ export async function GET() {
 
     const sheets = google.sheets({ version: 'v4', auth });
     
-    // Fetch logs from Crawl_Log sheet
+    // Fetch logs from CrawlLogs sheet
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: sheetId,
-      range: 'Crawl_Log',
+      range: 'CrawlLogs',
     });
 
     const rows = response.data.values;
@@ -32,17 +32,17 @@ export async function GET() {
       return NextResponse.json({ status: 'success', data: [] });
     }
 
-    // Assuming headers are in row 0: Time, Query, Count, Status
-    // We want the newest logs first, so we reverse the rows (excluding header)
+    // CrawlLogs headers: source_url, status, failure_reason, http_status, page_title, html_length, text_length, image_count, image_urls, screenshot_path, last_checked
     const logs = rows.slice(1).reverse().map(row => ({
-      time: row[0] || '',
-      query: row[1] || '',
-      count: row[2] || '0',
-      status: row[3] || '',
+      url: row[0] || '',
+      status: row[1] || '',
+      failure_reason: row[2] || '',
+      title: row[4] || '',
+      time: row[10] || '',
     }));
 
-    // Return the latest 10 logs
-    return NextResponse.json({ status: 'success', data: logs.slice(0, 10) });
+    // Return the latest 20 logs
+    return NextResponse.json({ status: 'success', data: logs.slice(0, 20) });
 
   } catch (error: any) {
     console.error('Failed to fetch crawl logs:', error);

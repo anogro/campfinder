@@ -12,6 +12,7 @@ from bs4 import BeautifulSoup
 import google.generativeai as genai
 from playwright.sync_api import sync_playwright
 import datetime
+from dotenv import load_dotenv
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Overseas Camp Crawler")
@@ -20,21 +21,38 @@ def parse_args():
     parser.add_argument("--season", required=False, default="여름방학", help="Season (e.g., 여름방학)")
     return parser.parse_args()
 
-def extract_text_with_bs4(html_content):
+def extract_images(html_content, base_url):
     soup = BeautifulSoup(html_content, "html.parser")
-    text_blocks = []
-    for tag in soup.find_all(['p', 'div', 'span', 'h1', 'h2', 'h3']):
-        text = tag.get_text(separator=' ', strip=True)
-        if len(text) > 20:
-            text_blocks.append(text)
-    return " ".join(text_blocks)
-
-def check_image_only(html_content):
-    soup = BeautifulSoup(html_content, "html.parser")
-    text_len = len(soup.get_text(strip=True))
     imgs = soup.find_all('img')
-    img_urls = [img.get('src') for img in imgs if img.get('src')]
-    return text_len < 200 and len(img_urls) > 0, img_urls
+    extracted_images = []
+    
+    for img in imgs:
+        url_candidates = [
+            img.get('src'),
+            img.get('srcset'),
+            img.get('data-src'),
+            img.get('data-original'),
+            img.get('data-lazy-src')
+        ]
+        valid_url = None
+        for candidate in url_candidates:
+            if candidate and isinstance(candidate, str) and len(candidate.strip()) > 0:
+                # Handle srcset simple split (take first URL)
+                if ',' in candidate:
+                    candidate = candidate.split(',')[0].strip().split(' ')[0]
+                valid_url = candidate
+                break
+                
+        if valid_url:
+            abs_url = urllib.parse.urljoin(base_url, valid_url)
+            alt_text = img.get('alt', '')
+            extracted_images.append({
+                "url": abs_url,
+                "alt": alt_text,
+                "type": "img"
+            })
+            
+    return extracted_images
 
 def analyze_with_llm(text_content):
     api_key = os.environ.get("GEMINI_API_KEY")
@@ -45,22 +63,13 @@ def analyze_with_llm(text_content):
     
     prompt = """
     당신은 해외 캠프 정보 수집 에이전트다.
-    목표: 도시, 연도, 기간에 해당하는 해외 캠프 정보를 최대한 수집하고 구조화한다.
-
-    중요 규칙:
-    1. URL을 발견하면 반드시 상태를 기록한다.
-    2. 정보 추출 실패 시 이유를 남긴다.
-    3. 절대로 실패한 URL을 버리지 않는다.
-    4. 캠프 정보가 없더라도 URL 자체는 저장한다.
-    5. 추측하지 않는다.
-    6. 페이지에 명시된 내용만 사용한다.
-
-    성공 시 아래 10가지 정보를 추출하라. (정보가 없으면 빈 문자열 "")
-    camp_name, city, country, year, season, age_range, duration, accommodation, tuition, source_url
+    목표: 제공된 웹페이지 텍스트에서 캠프 정보를 추출하라.
+    규칙: 페이지에 명시된 내용만 사용하고, 추측하지 않는다. 정보가 없으면 빈 문자열 ""을 반환한다.
+    
+    필수 추출 필드: camp_name, city, country, year, season, age_range, duration, accommodation, tuition
     
     출력 형식은 반드시 아래 JSON을 따를 것:
     {
-      "status": "SUCCESS",
       "camp_name": "",
       "city": "",
       "country": "",
@@ -74,12 +83,15 @@ def analyze_with_llm(text_content):
     """
     
     model = genai.GenerativeModel('gemini-1.5-flash', generation_config={"response_mime_type": "application/json"})
-    full_prompt = prompt + "\n\n[웹페이지 텍스트]\n" + text_content[:15000]
+    full_prompt = prompt + "\n\n[웹페이지 텍스트]\n" + text_content[:20000]
     
-    response = model.generate_content(full_prompt)
-    
-    res_text = response.text.strip()
-    return json.loads(res_text)
+    try:
+        response = model.generate_content(full_prompt)
+        res_text = response.text.strip()
+        return json.loads(res_text)
+    except Exception as e:
+        print(f"LLM Error: {e}")
+        return None
 
 def get_google_creds():
     scopes = [
@@ -105,11 +117,7 @@ def get_google_creds():
             "client_x509_cert_url": f"https://www.googleapis.com/robot/v1/metadata/x509/{urllib.parse.quote(client_email)}"
         }
     else:
-        # Fallback to json (for local test)
-        creds_json = os.environ.get("GOOGLE_CREDENTIALS_JSON")
-        if not creds_json:
-            raise ValueError("No valid Google credentials found in environment variables.")
-        creds_dict = json.loads(creds_json)
+        raise ValueError("Google credentials are not set in environment variables.")
         
     return Credentials.from_service_account_info(creds_dict, scopes=scopes)
 
@@ -128,8 +136,9 @@ def upload_to_drive(creds, folder_id, file_name, file_bytes):
         return ""
 
 def main():
+    load_dotenv(".env.local")
     args = parse_args()
-    print("Starting crawler with new architecture...")
+    print("Starting Playwright crawler with advanced scrolling & diagnostic logs...")
     
     creds = get_google_creds()
     client = gspread.authorize(creds)
@@ -138,17 +147,16 @@ def main():
     if not sheet_id:
         raise ValueError("GOOGLE_SHEET_ID environment variable not set")
         
-    # Drive Folder ID
     folder_id = "134owBld4vMhsK1T_GQ0CgrWly4VT6MWg"
         
     sheet = client.open_by_key(sheet_id)
-    main_worksheet = sheet.worksheet("Camps")
-    log_worksheet = sheet.worksheet("Crawl_Log")
-    target_sheet = sheet.worksheet("Target_Links")
+    camps_ws = sheet.worksheet("Camps")
+    logs_ws = sheet.worksheet("CrawlLogs")
+    images_ws = sheet.worksheet("Images")
+    target_ws = sheet.worksheet("Target_Links")
     
-    target_data = target_sheet.get_all_values()
-    existing_camps_data = main_worksheet.get_all_values()
-    existing_urls = [row[11] for row in existing_camps_data[1:]] if len(existing_camps_data) > 1 else []
+    target_data = target_ws.get_all_values()
+    existing_urls = [row[9] for row in camps_ws.get_all_values()[1:]] if len(camps_ws.get_all_values()) > 1 else []
     
     target_jobs = []
     
@@ -159,21 +167,24 @@ def main():
         season = row[3].strip() if len(row) > 3 else args.season
         status = row[4].strip() if len(row) > 4 else ""
             
-        if url.startswith("http") and status not in ["Done", "완료", "실패", "Failed", "SUCCESS", "IMAGE_ONLY", "FETCH_FAILED"]:
+        if url.startswith("http") and status not in ["Done", "완료", "실패", "Failed", "SUCCESS"]:
             if url in existing_urls:
-                target_sheet.update_cell(idx + 2, 5, "Done (Duplicated)")
+                target_ws.update_cell(idx + 2, 5, "Done (Duplicated)")
                 continue
             target_jobs.append({
                 "url": url, "city": city, "year": year, "season": season, "row_idx": idx + 2
             })
             
-    print(f"Found {len(target_jobs)} pending URLs.")
-    if len(target_jobs) == 0:
+    if not target_jobs:
         print("No URLs to process.")
         return
         
-    camps_data = []
+    success_camps = []
+    all_logs = []
+    all_images = []
     url_results = {}
+    
+    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
@@ -183,11 +194,16 @@ def main():
             url = job["url"]
             page = context.new_page()
             
-            result = {
-                "status": "UNKNOWN_ERROR",
+            log = {
+                "source_url": url, "status": "UNKNOWN_ERROR", "failure_reason": "",
+                "http_status": "", "page_title": "", "html_length": 0, "text_length": 0,
+                "image_count": 0, "image_urls": "", "screenshot_path": "", "last_checked": timestamp
+            }
+            
+            camp = {
                 "camp_name": "", "city": job["city"], "country": "", "year": job["year"],
-                "season": job["season"], "age_range": "", "duration": "", "accommodation": "", "tuition": "",
-                "source_url": url, "image_url": "", "page_title": "", "failure_reason": "", "screenshot_url": ""
+                "season": job["season"], "age_range": "", "duration": "", "accommodation": "",
+                "tuition": "", "source_url": url
             }
             
             try:
@@ -195,96 +211,115 @@ def main():
                 response = page.goto(url, timeout=30000, wait_until="domcontentloaded")
                 time.sleep(3)
                 
-                result["page_title"] = page.title()
+                log["page_title"] = page.title()
                 
                 if not response or not response.ok:
-                    result["status"] = "ACCESS_DENIED" if response and response.status in [401, 403] else "FETCH_FAILED"
-                    result["failure_reason"] = f"HTTP {response.status}" if response else "No response"
+                    log["http_status"] = str(response.status) if response else "0"
+                    log["status"] = "ACCESS_DENIED" if response and response.status in [401, 403] else "FETCH_FAILED"
+                    log["failure_reason"] = f"HTTP {log['http_status']}" if response else "No response"
                 else:
-                    html_content = page.content()
-                    cleaned_text = extract_text_with_bs4(html_content)
-                    is_img_only, img_urls = check_image_only(html_content)
+                    log["http_status"] = str(response.status)
                     
-                    if is_img_only:
-                        result["status"] = "IMAGE_ONLY"
-                        result["failure_reason"] = "Content stored as image"
-                        result["image_url"] = img_urls[0] if img_urls else ""
-                    elif len(cleaned_text) < 100:
-                        result["status"] = "EMPTY_CONTENT"
-                        result["failure_reason"] = "Text length < 100"
-                    else:
-                        print("Analyzing text...")
-                        llm_res = analyze_with_llm(cleaned_text)
-                        result.update({
-                            "status": "SUCCESS",
-                            "camp_name": llm_res.get("camp_name", ""),
-                            "city": llm_res.get("city", job["city"]),
-                            "country": llm_res.get("country", ""),
-                            "year": llm_res.get("year", job["year"]),
-                            "season": llm_res.get("season", job["season"]),
-                            "age_range": llm_res.get("age_range", ""),
-                            "duration": llm_res.get("duration", ""),
-                            "accommodation": llm_res.get("accommodation", ""),
-                            "tuition": llm_res.get("tuition", "")
-                        })
+                    # Scrolling logic (max 8 times, 800px, 1s sleep)
+                    for _ in range(8):
+                        page.evaluate("window.scrollBy(0, 800)")
+                        time.sleep(1)
                         
+                    html_content = page.content()
+                    try:
+                        text_content = page.locator("body").inner_text()
+                    except:
+                        text_content = ""
+                        
+                    images = extract_images(html_content, url)
+                    img_url_list = [img["url"] for img in images]
+                    
+                    log["html_length"] = len(html_content)
+                    log["text_length"] = len(text_content)
+                    log["image_count"] = len(images)
+                    log["image_urls"] = ", ".join(img_url_list)[:1000] # truncate string
+                    
+                    # Save image meta for the separate Images sheet
+                    for img in images:
+                        all_images.append([url, img["url"], img["alt"], img["type"], timestamp])
+                    
+                    if log["text_length"] < 100 and log["image_count"] > 3:
+                        log["status"] = "IMAGE_ONLY"
+                        log["failure_reason"] = "Text length < 100, mostly images"
+                    elif log["text_length"] < 100:
+                        log["status"] = "EMPTY_CONTENT"
+                        log["failure_reason"] = "Text length < 100"
+                    else:
+                        print("LLM Extraction running...")
+                        llm_res = analyze_with_llm(text_content)
+                        if llm_res:
+                            log["status"] = "SUCCESS"
+                            camp.update({
+                                "camp_name": llm_res.get("camp_name", ""),
+                                "city": llm_res.get("city", job["city"]),
+                                "country": llm_res.get("country", ""),
+                                "year": llm_res.get("year", job["year"]),
+                                "season": llm_res.get("season", job["season"]),
+                                "age_range": llm_res.get("age_range", ""),
+                                "duration": llm_res.get("duration", ""),
+                                "accommodation": llm_res.get("accommodation", ""),
+                                "tuition": llm_res.get("tuition", "")
+                            })
+                        else:
+                            log["status"] = "LLM_ERROR"
+                            log["failure_reason"] = "JSON Parse Failure"
             except Exception as e:
-                result["status"] = "FETCH_FAILED"
-                result["failure_reason"] = str(e)[:100]
+                log["status"] = "TIMEOUT" if "Timeout" in str(e) else "JS_REQUIRED"
+                log["failure_reason"] = str(e)[:100]
             
             # Take screenshot if failed or image only
-            if result["status"] != "SUCCESS":
+            if log["status"] != "SUCCESS":
                 try:
                     screenshot_bytes = page.screenshot(full_page=False)
                     file_name = f"error_{int(time.time())}.png"
-                    print(f"Uploading screenshot {file_name} to Drive...")
+                    print(f"Uploading screenshot to Drive...")
                     drive_url = upload_to_drive(creds, folder_id, file_name, screenshot_bytes)
-                    result["screenshot_url"] = drive_url
+                    log["screenshot_path"] = drive_url
                 except Exception as ex:
                     print(f"Screenshot failed: {ex}")
             
-            camps_data.append(result)
-            url_results[url] = result["status"]
+            if log["status"] == "SUCCESS":
+                success_camps.append(camp)
+            
+            all_logs.append(log)
+            url_results[url] = log["status"]
             page.close()
             
         browser.close()
 
     try:
-        new_rows = []
-        for i, camp in enumerate(camps_data):
-            next_idx = len(existing_camps_data) + i
-            prog_id = f"PROG-{camp['year']}-{camp['city']}-{str(next_idx).zfill(3)}"
+        # Push Camps (SUCCESS only)
+        if success_camps:
+            camps_rows = [[
+                c["camp_name"], c["city"], c["country"], c["year"], c["season"],
+                c["age_range"], c["duration"], c["accommodation"], c["tuition"], c["source_url"]
+            ] for c in success_camps]
+            camps_ws.append_rows(camps_rows)
             
-            new_rows.append([
-                prog_id,
-                camp["status"],
-                camp["camp_name"],
-                camp["country"],
-                camp["city"],
-                camp["year"],
-                camp["season"],
-                camp["age_range"],
-                camp["duration"],
-                camp["accommodation"],
-                camp["tuition"],
-                camp["source_url"],
-                camp["image_url"],
-                camp["page_title"],
-                camp["failure_reason"],
-                camp["screenshot_url"],
-                "대기"
-            ])
+        # Push Logs (All)
+        if all_logs:
+            logs_rows = [[
+                l["source_url"], l["status"], l["failure_reason"], l["http_status"], l["page_title"],
+                l["html_length"], l["text_length"], l["image_count"], l["image_urls"], l["screenshot_path"], l["last_checked"]
+            ] for l in all_logs]
+            logs_ws.append_rows(logs_rows)
             
-        if new_rows:
-            main_worksheet.append_rows(new_rows)
+        # Push Images
+        if all_images:
+            # Batch in 1000 chunks to avoid quota limits
+            for i in range(0, len(all_images), 1000):
+                images_ws.append_rows(all_images[i:i+1000])
             
+        # Update Target_Links status
         for job in target_jobs:
-            url = job["url"]
-            row_idx = job["row_idx"]
-            status = url_results.get(url, "UNKNOWN_ERROR")
-            target_sheet.update_cell(row_idx, 5, status)
+            target_ws.update_cell(job["row_idx"], 5, url_results.get(job["url"], "UNKNOWN"))
             
-        print(f"Successfully processed {len(new_rows)} rows.")
+        print("Crawler finished successfully.")
         
     except Exception as e:
         print(f"Failed to save data: {e}")

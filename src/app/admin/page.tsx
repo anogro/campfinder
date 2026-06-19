@@ -125,20 +125,31 @@ export default function AdminDashboard() {
               <thead className="text-xs text-slate-500 bg-slate-50 dark:bg-slate-800 dark:text-slate-400 uppercase border-b dark:border-slate-700">
                 <tr>
                   <th className="px-6 py-3">실행 일시</th>
-                  <th className="px-6 py-3">수집 키워드</th>
-                  <th className="px-6 py-3">수집 데이터 건수</th>
+                  <th className="px-6 py-3">실행 일시</th>
                   <th className="px-6 py-3">상태</th>
+                  <th className="px-6 py-3">URL 및 실패 사유</th>
                 </tr>
               </thead>
               <tbody>
                 {crawlLogs.length === 0 ? (
-                  <tr><td colSpan={4} className="text-center py-6 text-slate-500">최근 크롤링 기록이 없습니다.</td></tr>
+                  <tr><td colSpan={3} className="text-center py-6 text-slate-500">최근 크롤링 기록이 없습니다.</td></tr>
                 ) : crawlLogs.map((log, idx) => (
                   <tr key={idx} className="border-b dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50">
-                    <td className="px-6 py-4 font-medium">{log.time}</td>
-                    <td className="px-6 py-4">{log.query}</td>
-                    <td className="px-6 py-4 text-blue-600 font-semibold">{log.count}건</td>
-                    <td className="px-6 py-4">{log.status}</td>
+                    <td className="px-6 py-4 font-medium">{log.time || '-'}</td>
+                    <td className="px-6 py-4">
+                      <span className={`px-2 py-1 rounded-full text-xs font-bold ${
+                        log.status === 'SUCCESS' ? 'bg-green-100 text-green-700' :
+                        log.status === 'IMAGE_ONLY' ? 'bg-orange-100 text-orange-700' :
+                        log.status === 'EMPTY_CONTENT' ? 'bg-yellow-100 text-yellow-700' :
+                        'bg-red-100 text-red-700'
+                      }`}>
+                        {log.status || 'UNKNOWN'}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="font-semibold text-slate-800 dark:text-slate-200 break-all">{log.url}</div>
+                      {log.failure_reason && <div className="text-xs text-red-500 mt-1">{log.failure_reason}</div>}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -163,12 +174,12 @@ export default function AdminDashboard() {
             <table className="w-full text-sm text-left">
               <thead className="text-xs text-slate-500 bg-slate-50 dark:bg-slate-800 dark:text-slate-400 uppercase">
                 <tr>
-                  <th className="px-6 py-3">승인 상태</th>
-                  <th className="px-6 py-3">크롤링 상태</th>
-                  <th className="px-6 py-3">프로그램 ID</th>
-                  <th className="px-6 py-3">캠프명 / 에러사유</th>
-                  <th className="px-6 py-3">도시 / 기간</th>
-                  <th className="px-6 py-3">스크린샷</th>
+                  <th className="px-6 py-3">캠프명</th>
+                  <th className="px-6 py-3">국가 / 도시</th>
+                  <th className="px-6 py-3">시즌 / 기간</th>
+                  <th className="px-6 py-3">참가 연령</th>
+                  <th className="px-6 py-3">비용</th>
+                  <th className="px-6 py-3">원문 링크</th>
                 </tr>
               </thead>
               <tbody>
@@ -177,37 +188,23 @@ export default function AdminDashboard() {
                 ) : filteredCamps.map((camp, idx) => (
                   <tr key={idx} className="border-b dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50">
                     <td className="px-6 py-4">
-                      {camp['승인 상태'] === '승인' ? (
-                        <span className="flex items-center gap-1 text-green-600 bg-green-50 px-2 py-1 rounded-full w-fit"><CheckCircle size={14}/> 승인</span>
-                      ) : (
-                        <span className="flex items-center gap-1 text-slate-600 bg-slate-100 px-2 py-1 rounded-full w-fit"><Clock size={14}/> 대기</span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 font-medium">
-                      <span className={`px-2 py-1 rounded-full text-xs font-bold ${
-                        camp['상태'] === 'SUCCESS' ? 'bg-green-100 text-green-700' :
-                        camp['상태'] === 'IMAGE_ONLY' ? 'bg-orange-100 text-orange-700' :
-                        camp['상태']?.includes('FAILED') || camp['상태']?.includes('ERROR') ? 'bg-red-100 text-red-700' :
-                        'bg-slate-100 text-slate-700'
-                      }`}>
-                        {camp['상태'] || 'UNKNOWN'}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 font-medium">{camp['프로그램 ID'] || '-'}</td>
-                    <td className="px-6 py-4">
                       <div className="font-semibold text-slate-900 dark:text-white">
-                        {camp['캠프명'] || (camp['상태'] !== 'SUCCESS' && camp['상태'] !== 'IMAGE_ONLY' ? '수집 실패' : '이름 없음')}
+                        {camp.camp_name || '이름 없음'}
                       </div>
-                      {camp['실패 사유'] && <div className="text-xs text-red-500 mt-1">{camp['실패 사유']}</div>}
                     </td>
                     <td className="px-6 py-4">
-                      <div className="text-sm">{camp['도시']} {camp['연도']} {camp['시즌']}</div>
-                      <div className="text-xs text-slate-500">{camp['기간']}</div>
+                      <div className="text-sm">{camp.country} {camp.city}</div>
                     </td>
                     <td className="px-6 py-4">
-                      {camp['스크린샷 URL'] ? (
-                        <a href={camp['스크린샷 URL']} target="_blank" rel="noreferrer" className="text-blue-500 hover:underline text-sm font-medium">
-                          보기
+                      <div className="text-sm">{camp.year} {camp.season}</div>
+                      <div className="text-xs text-slate-500">{camp.duration}</div>
+                    </td>
+                    <td className="px-6 py-4 text-sm">{camp.age_range || '-'}</td>
+                    <td className="px-6 py-4 text-sm font-medium text-slate-700 dark:text-slate-300">{camp.tuition || '-'}</td>
+                    <td className="px-6 py-4">
+                      {camp.source_url ? (
+                        <a href={camp.source_url} target="_blank" rel="noreferrer" className="text-blue-500 hover:underline text-sm font-medium">
+                          이동
                         </a>
                       ) : '-'}
                     </td>
