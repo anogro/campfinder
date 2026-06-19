@@ -45,6 +45,12 @@ def extract_images(html_content, base_url):
                 
         if valid_url:
             abs_url = urllib.parse.urljoin(base_url, valid_url)
+            lower_url = abs_url.lower()
+            if any(x in lower_url for x in ["logo", "icon", "btn", "bg", "banner", "pixel", "tracker"]):
+                continue
+            if abs_url.endswith(".gif") or abs_url.endswith(".svg"):
+                continue
+            
             alt_text = img.get('alt', '')
             extracted_images.append({
                 "url": abs_url,
@@ -96,10 +102,14 @@ def analyze_with_llm(text_content):
             res_text = res_text[:-3]
         res_text = res_text.strip()
         
-        return json.loads(res_text)
+        try:
+            return json.loads(res_text), None
+        except Exception as e:
+            return None, f"JSON Parse Error: {e} | Text: {res_text[:50]}"
+            
     except Exception as e:
         print(f"LLM Error: {e}")
-        return None
+        return None, str(e)
 
 def get_google_creds():
     scopes = [
@@ -268,7 +278,7 @@ def main():
                         log["failure_reason"] = "Text length < 100"
                     else:
                         print("LLM Extraction running...")
-                        llm_res = analyze_with_llm(text_content)
+                        llm_res, llm_err = analyze_with_llm(text_content)
                         if llm_res:
                             log["status"] = "SUCCESS"
                             camp.update({
@@ -284,7 +294,7 @@ def main():
                             })
                         else:
                             log["status"] = "LLM_ERROR"
-                            log["failure_reason"] = "JSON Parse Failure"
+                            log["failure_reason"] = f"LLM Failed: {llm_err}"
             except Exception as e:
                 log["status"] = "TIMEOUT" if "Timeout" in str(e) else "JS_REQUIRED"
                 log["failure_reason"] = str(e)[:100]
