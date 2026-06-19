@@ -163,11 +163,12 @@ export default function AdminDashboard() {
             <table className="w-full text-sm text-left">
               <thead className="text-xs text-slate-500 bg-slate-50 dark:bg-slate-800 dark:text-slate-400 uppercase">
                 <tr>
-                  <th className="px-6 py-3">상태</th>
+                  <th className="px-6 py-3">승인 상태</th>
+                  <th className="px-6 py-3">크롤링 상태</th>
                   <th className="px-6 py-3">프로그램 ID</th>
-                  <th className="px-6 py-3">프로그램 명</th>
-                  <th className="px-6 py-3">운영 기관</th>
-                  <th className="px-6 py-3">시즌</th>
+                  <th className="px-6 py-3">캠프명 / 에러사유</th>
+                  <th className="px-6 py-3">도시 / 기간</th>
+                  <th className="px-6 py-3">스크린샷</th>
                 </tr>
               </thead>
               <tbody>
@@ -179,17 +180,37 @@ export default function AdminDashboard() {
                       {camp['승인 상태'] === '승인' ? (
                         <span className="flex items-center gap-1 text-green-600 bg-green-50 px-2 py-1 rounded-full w-fit"><CheckCircle size={14}/> 승인</span>
                       ) : (
-                        <span className="flex items-center gap-1 text-orange-600 bg-orange-50 px-2 py-1 rounded-full w-fit"><Clock size={14}/> 대기</span>
+                        <span className="flex items-center gap-1 text-slate-600 bg-slate-100 px-2 py-1 rounded-full w-fit"><Clock size={14}/> 대기</span>
                       )}
                     </td>
-                    <td className="px-6 py-4 font-medium">{camp['프로그램 ID']}</td>
-                    <td className="px-6 py-4">
-                      {camp['프로그램 명'] === '문의 필요' ? (
-                        <span className="flex items-center gap-1 text-red-500"><AlertCircle size={14}/> 문의 필요</span>
-                      ) : camp['프로그램 명']}
+                    <td className="px-6 py-4 font-medium">
+                      <span className={`px-2 py-1 rounded-full text-xs font-bold ${
+                        camp['상태'] === 'SUCCESS' ? 'bg-green-100 text-green-700' :
+                        camp['상태'] === 'IMAGE_ONLY' ? 'bg-orange-100 text-orange-700' :
+                        camp['상태']?.includes('FAILED') || camp['상태']?.includes('ERROR') ? 'bg-red-100 text-red-700' :
+                        'bg-slate-100 text-slate-700'
+                      }`}>
+                        {camp['상태'] || 'UNKNOWN'}
+                      </span>
                     </td>
-                    <td className="px-6 py-4">{camp['운영 기관']}</td>
-                    <td className="px-6 py-4">{camp['시즌 분류']}</td>
+                    <td className="px-6 py-4 font-medium">{camp['프로그램 ID'] || '-'}</td>
+                    <td className="px-6 py-4">
+                      <div className="font-semibold text-slate-900 dark:text-white">
+                        {camp['캠프명'] || (camp['상태'] !== 'SUCCESS' && camp['상태'] !== 'IMAGE_ONLY' ? '수집 실패' : '이름 없음')}
+                      </div>
+                      {camp['실패 사유'] && <div className="text-xs text-red-500 mt-1">{camp['실패 사유']}</div>}
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="text-sm">{camp['도시']} {camp['연도']} {camp['시즌']}</div>
+                      <div className="text-xs text-slate-500">{camp['기간']}</div>
+                    </td>
+                    <td className="px-6 py-4">
+                      {camp['스크린샷 URL'] ? (
+                        <a href={camp['스크린샷 URL']} target="_blank" rel="noreferrer" className="text-blue-500 hover:underline text-sm font-medium">
+                          보기
+                        </a>
+                      ) : '-'}
+                    </td>
                   </tr>
                 ))}
               </tbody>
