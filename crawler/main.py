@@ -88,28 +88,41 @@ def analyze_with_llm(text_content):
     }
     """
     
-    model = genai.GenerativeModel('gemini-1.5-flash-latest', generation_config={"response_mime_type": "application/json"})
+    models_to_try = [
+        ('gemini-1.5-flash', {"response_mime_type": "application/json"}),
+        ('gemini-1.5-pro', {"response_mime_type": "application/json"}),
+        ('gemini-pro', {}) # gemini-pro는 response_mime_type 미지원
+    ]
+    
     full_prompt = prompt + "\n\n[웹페이지 텍스트]\n" + text_content[:20000]
     
-    try:
-        response = model.generate_content(full_prompt)
-        res_text = response.text.strip()
-        if res_text.startswith("```json"):
-            res_text = res_text[7:]
-        elif res_text.startswith("```"):
-            res_text = res_text[3:]
-        if res_text.endswith("```"):
-            res_text = res_text[:-3]
-        res_text = res_text.strip()
-        
+    last_err = None
+    for model_name, gen_config in models_to_try:
         try:
-            return json.loads(res_text), None
-        except Exception as e:
-            return None, f"JSON Parse Error: {e} | Text: {res_text[:50]}"
+            model = genai.GenerativeModel(model_name, generation_config=gen_config if gen_config else None)
+            response = model.generate_content(full_prompt)
             
-    except Exception as e:
-        print(f"LLM Error: {e}")
-        return None, str(e)
+            res_text = response.text.strip()
+            if res_text.startswith("```json"):
+                res_text = res_text[7:]
+            elif res_text.startswith("```"):
+                res_text = res_text[3:]
+            if res_text.endswith("```"):
+                res_text = res_text[:-3]
+            res_text = res_text.strip()
+            
+            try:
+                return json.loads(res_text), None
+            except Exception as e:
+                return None, f"JSON Parse Error ({model_name}): {e} | Text: {res_text[:50]}"
+                
+        except Exception as e:
+            last_err = str(e)
+            if "404" in last_err or "not found" in last_err.lower():
+                continue # Try next model
+            return None, f"LLM Error ({model_name}): {e}"
+            
+    return None, f"All models failed. Last error: {last_err}"
 
 def get_google_creds():
     scopes = [
