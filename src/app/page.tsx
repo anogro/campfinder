@@ -14,7 +14,7 @@ export default async function Home() {
         isLoadingDummy = true;
       }
     } else {
-      camps = result.data.filter((c: CampData) => c['승인 상태'] === '승인');
+      camps = result.data; // Camps sheet now only contains SUCCESS camps
     }
   } catch (error: any) {
     console.error('Fetch error:', error.message);
@@ -25,46 +25,28 @@ export default async function Home() {
   if (isLoadingDummy) {
     camps = [
       {
-        "프로그램 ID": "PROG-2026-US-001",
-        "연동 도시 ID": "US-NY",
-        "시즌 분류": "2026_여름방학",
-        "프로그램 명": "뉴욕 아이비리그 리더십 영어 캠프",
-        "운영 기관": "Columbia University",
-        "모집/대행 기관": "프리미엄유학",
-        "운영 형태": "유학원 대행",
-        "한국어 지원 수준": "상",
-        "참가 대상": "만 10세 ~ 15세",
-        "참가 형태": "자녀 전용",
-        "프로그램 유형": "영어 몰입",
-        "연령대 그룹": "초등 고학년",
-        "정확한 일정": "2026.07.20 ~ 2026.08.10",
-        "숙소 옵션": "기숙사",
-        "프로그램 비용": "$4,500",
-        "대표 이미지 URL": "default_camp.png",
-        "상세 페이지 링크": "#",
-        "커리큘럼 핵심 요약": "아이비리그 캠퍼스 투어와 원어민 집중 영어 수업이 결합된 프리미엄 리더십 캠프입니다. 글로벌 인재로 성장할 수 있는 기회를 제공합니다.",
-        "승인 상태": "승인"
+        camp_name: "뉴욕 아이비리그 리더십 영어 캠프",
+        city: "New York",
+        country: "USA",
+        year: "2026",
+        season: "여름방학",
+        age_range: "만 10세 ~ 15세",
+        duration: "3주",
+        accommodation: "기숙사",
+        tuition: "$4,500",
+        source_url: "#"
       },
       {
-        "프로그램 ID": "PROG-2026-UK-002",
-        "연동 도시 ID": "UK-LON",
-        "시즌 분류": "2026_겨울방학",
-        "프로그램 명": "런던 브리티시 스쿨링 & 해리포터 스튜디오 투어",
-        "운영 기관": "London International School",
-        "모집/대행 기관": "영국유학원",
-        "운영 형태": "학교 자체 운영",
-        "한국어 지원 수준": "중",
-        "참가 대상": "만 8세 ~ 13세",
-        "참가 형태": "가족 동반",
-        "프로그램 유형": "정규 학제 스쿨링",
-        "연령대 그룹": "초등 전학년",
-        "정확한 일정": "2026.01.10 ~ 2026.02.05",
-        "숙소 옵션": "외부 연계 숙소",
-        "프로그램 비용": "£3,200",
-        "대표 이미지 URL": "default_camp.png",
-        "상세 페이지 링크": "#",
-        "커리큘럼 핵심 요약": "영국 현지 학교에서 진행되는 정규 스쿨링 체험과 함께 런던 시내 및 해리포터 스튜디오 투어가 포함된 특별한 캠프입니다.",
-        "승인 상태": "승인"
+        camp_name: "런던 브리티시 스쿨링 & 해리포터 스튜디오 투어",
+        city: "London",
+        country: "UK",
+        year: "2026",
+        season: "겨울방학",
+        age_range: "만 8세 ~ 13세",
+        duration: "4주",
+        accommodation: "외부 연계 숙소",
+        tuition: "£3,200",
+        source_url: "#"
       }
     ];
   }
