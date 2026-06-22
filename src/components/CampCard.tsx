@@ -15,6 +15,7 @@ export interface CampData {
   accommodation: string;
   tuition: string;
   source_url: string;
+  image_url?: string;
 }
 
 export default function CampCard({ camp }: { camp: CampData }) {
@@ -52,7 +53,7 @@ export default function CampCard({ camp }: { camp: CampData }) {
       <div className="relative h-60 w-full bg-[#050510] overflow-hidden">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <motion.img 
-          src={'/default_camp.png'} 
+          src={camp.image_url || '/default_camp.png'} 
           alt={camp.camp_name || 'Camp'}
           className="w-full h-full object-cover"
           whileHover={{ scale: 1.1 }}

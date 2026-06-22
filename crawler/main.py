@@ -275,6 +275,7 @@ def main():
                         
                     images = extract_images(html_content, url)
                     img_url_list = [img["url"] for img in images]
+                    first_image = img_url_list[0] if img_url_list else ""
                     
                     log["html_length"] = len(html_content)
                     log["text_length"] = len(text_content)
@@ -305,7 +306,8 @@ def main():
                                 "age_range": llm_res.get("age_range", ""),
                                 "duration": llm_res.get("duration", ""),
                                 "accommodation": llm_res.get("accommodation", ""),
-                                "tuition": llm_res.get("tuition", "")
+                                "tuition": llm_res.get("tuition", ""),
+                                "image_url": first_image
                             })
                         else:
                             log["status"] = "LLM_ERROR"
@@ -339,7 +341,7 @@ def main():
         if success_camps:
             camps_rows = [[
                 c["camp_name"], c["city"], c["country"], c["year"], c["season"],
-                c["age_range"], c["duration"], c["accommodation"], c["tuition"], c["source_url"]
+                c["age_range"], c["duration"], c["accommodation"], c["tuition"], c["source_url"], c.get("image_url", "")
             ] for c in success_camps]
             camps_ws.append_rows(camps_rows)
             
