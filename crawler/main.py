@@ -89,14 +89,14 @@ def analyze_with_llm(text_content):
     """
     
     models_to_try = [
-        ('gemini-1.5-flash', {"response_mime_type": "application/json"}),
-        ('gemini-1.5-pro', {"response_mime_type": "application/json"}),
-        ('gemini-pro', {}) # gemini-pro는 response_mime_type 미지원
+        ('gemini-1.5-flash', {}),
+        ('gemini-1.5-pro', {}),
+        ('gemini-pro', {})
     ]
     
     full_prompt = prompt + "\n\n[웹페이지 텍스트]\n" + text_content[:20000]
     
-    last_err = None
+    all_errs = []
     for model_name, gen_config in models_to_try:
         try:
             model = genai.GenerativeModel(model_name, generation_config=gen_config if gen_config else None)
@@ -117,11 +117,12 @@ def analyze_with_llm(text_content):
                 return None, f"JSON Parse Error ({model_name}): {e} | Text: {res_text[:50]}"
                 
         except Exception as e:
-            last_err = str(e)
+            err_msg = f"[{model_name}] {e}"
             print(f"Model {model_name} failed: {e}")
+            all_errs.append(err_msg)
             continue # Try next model
             
-    return None, f"All models failed. Last error: {last_err}"
+    return None, f"All models failed. Details: {' | '.join(all_errs)}"
 
 def get_google_creds():
     scopes = [
