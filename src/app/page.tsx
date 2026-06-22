@@ -2,6 +2,8 @@ import CampCard, { CampData } from '@/components/CampCard';
 import { getCampsData } from '@/lib/googleSheets';
 import { AnimatedReveal, AnimatedHero, AnimatedStaggerGroup } from '@/components/AnimatedReveal';
 
+export const dynamic = 'force-dynamic';
+
 export default async function Home() {
   let camps: CampData[] = [];
   let errorMsg = '';
