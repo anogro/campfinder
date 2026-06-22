@@ -118,9 +118,8 @@ def analyze_with_llm(text_content):
                 
         except Exception as e:
             last_err = str(e)
-            if "404" in last_err or "not found" in last_err.lower():
-                continue # Try next model
-            return None, f"LLM Error ({model_name}): {e}"
+            print(f"Model {model_name} failed: {e}")
+            continue # Try next model
             
     return None, f"All models failed. Last error: {last_err}"
 
@@ -250,7 +249,7 @@ def main():
             
             try:
                 print(f"Visiting {url}...")
-                response = page.goto(url, timeout=30000, wait_until="domcontentloaded")
+                response = page.goto(url, timeout=60000, wait_until="domcontentloaded")
                 time.sleep(3)
                 
                 log["page_title"] = page.title()
