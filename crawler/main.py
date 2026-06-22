@@ -224,7 +224,9 @@ def main():
     all_images = []
     url_results = {}
     
-    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    # 한국 시간(KST) 적용
+    kst = datetime.timezone(datetime.timedelta(hours=9))
+    timestamp = datetime.datetime.now(kst).strftime("%Y-%m-%d %H:%M:%S")
     
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
